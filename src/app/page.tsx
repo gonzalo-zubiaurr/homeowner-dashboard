@@ -103,8 +103,11 @@ function SidePanel({ lease, checklist, onClose, onToggle, onUpdateLease, togglin
   const done = CHECKLIST_ITEMS.filter(i => checklist[i.key]).length
   const status = computeStatus(lease, done)
   const [notes, setNotes] = useState(lease.notes || '')
+  const [intercomLink, setIntercomLink] = useState(lease.intercom_link || '')
+  const [savingIntercom, setSavingIntercom] = useState(false)
   const [saving, setSaving] = useState(false)
   const saveNotes = async () => { setSaving(true); await onUpdateLease(lease.lease_id, { notes }); setSaving(false) }
+  const saveIntercom = async () => { setSavingIntercom(true); await onUpdateLease(lease.lease_id, { intercom_link: intercomLink }); setSavingIntercom(false) }
 
   return (
     <div style={{ position: 'fixed', top: 0, right: 0, width: 480, height: '100vh', background: '#fff', boxShadow: '-4px 0 24px rgba(0,0,0,0.12)', zIndex: 100, display: 'flex', flexDirection: 'column', overflowY: 'auto' }}>
@@ -195,6 +198,20 @@ function SidePanel({ lease, checklist, onClose, onToggle, onUpdateLease, togglin
               {lease.escalated ? '🚨 Escalated' : '🚨 Escalate'}
             </button>
           </div>
+        </div>
+
+        {/* Intercom Link */}
+        <div style={{ marginBottom: 16 }}>
+          <div style={{ fontSize: 11, fontWeight: 700, color: '#94A3B8', letterSpacing: '0.06em', marginBottom: 8, fontFamily: 'Montserrat, sans-serif' }}>INTERCOM CONVERSATION</div>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <input value={intercomLink} onChange={e => setIntercomLink(e.target.value)} placeholder="Paste Intercom conversation link…"
+              style={{ flex: 1, padding: '9px 12px', borderRadius: 8, border: '1.5px solid #E2E8F0', background: '#F8FAFC', color: '#1A3A5C', fontFamily: 'Montserrat, sans-serif', fontSize: 12, outline: 'none' }} />
+            {intercomLink && <a href={intercomLink} target="_blank" rel="noreferrer" style={{ padding: '9px 12px', borderRadius: 8, background: '#EEF3F7', color: '#2C4F6B', fontWeight: 700, fontSize: 12, textDecoration: 'none', whiteSpace: 'nowrap' as const }}>Open ↗</a>}
+          </div>
+          <button onClick={saveIntercom} disabled={savingIntercom}
+            style={{ marginTop: 8, padding: '8px 16px', borderRadius: 7, background: '#2C4F6B', color: '#fff', border: 'none', fontFamily: 'Montserrat, sans-serif', fontSize: 12, fontWeight: 700, cursor: savingIntercom ? 'wait' : 'pointer', opacity: savingIntercom ? 0.7 : 1 }}>
+            {savingIntercom ? 'Saving…' : 'Save Link'}
+          </button>
         </div>
 
         {/* Notes */}
@@ -521,7 +538,7 @@ export default function Dashboard() {
                         </td>
                       )}
                       {!hiddenCols.has('concierge') && <td style={{ padding: '11px 14px', position: 'sticky', left: hiddenCols.has('address') ? 0 : 220, background: rowBg, zIndex: 1, whiteSpace: 'nowrap', color: '#1A3A5C', fontWeight: 500 }}>{lease.concierge}</td>}
-                      {!hiddenCols.has('homeowner_name') && <td style={{ padding: '11px 14px', color: '#1A3A5C', fontWeight: 600, whiteSpace: 'nowrap' }}>{lease.homeowner_name}</td>}
+                      {!hiddenCols.has('homeowner_name') && <td style={{ padding: '11px 14px', whiteSpace: 'nowrap' }}>{lease.homeowner_link ? <a href={lease.homeowner_link} target="_blank" rel="noreferrer" onClick={e => e.stopPropagation()} style={{ color: '#2C4F6B', fontWeight: 600, textDecoration: 'underline' }}>{lease.homeowner_name}</a> : <span style={{ color: '#1A3A5C', fontWeight: 600 }}>{lease.homeowner_name}</span>}</td>}
                       {!hiddenCols.has('lease_start_on') && (
                         <td style={{ padding: '11px 14px', whiteSpace: 'nowrap' }}>
                           {lease.lease_start_on
