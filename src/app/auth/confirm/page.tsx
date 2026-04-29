@@ -6,27 +6,46 @@ const ALLOWED_DOMAINS = ['belonghome.com', 'belong.pe']
 
 export default function AuthConfirm() {
   useEffect(() => {
-    const handleAuth = async () => {
-      // Listen for auth state change — Supabase auto-processes the hash
-      const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-        if (event === 'SIGNED_IN' && session?.user) {
-          subscription.unsubscribe()
-          const email = session.user.email || ''
-          if (ALLOWED_DOMAINS.some(d => email.endsWith(`@${d}`))) {
-            window.location.replace('/')
-          } else {
-            await supabase.auth.signOut()
-            window.location.replace('/login?error=domain')
-          }
-        } else if (event === 'INITIAL_SESSION' && !session) {
-          // No session found after timeout
-          setTimeout(() => {
-            window.location.replace('/login?error=auth')
-          }, 3000)
-        }
-      })
+    let redirected = false
+
+    const redirect = async (session: any) => {
+      if (redirected) return
+      redirected = true
+      const email = session.user.email || ''
+      if (ALLOWED_DOMAINS.some(d => email.endsWith(`@${d}`))) {
+        window.location.replace('/')
+      } else {
+        await supabase.auth.signOut()
+        window.location.replace('/login?error=domain')
+      }
     }
-    handleAuth()
+
+    // Method 1: Listen for auth state change
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      if (session?.user) {
+        redirect(session)
+      }
+    })
+
+    // Method 2: Poll for session every 500ms for up to 10 seconds
+    let attempts = 0
+    const interval = setInterval(async () => {
+      attempts++
+      const { data: { session } } = await supabase.auth.getSession()
+      if (session?.user) {
+        clearInterval(interval)
+        redirect(session)
+      }
+      if (attempts >= 20) {
+        clearInterval(interval)
+        if (!redirected) window.location.replace('/login?error=auth')
+      }
+    }, 500)
+
+    return () => {
+      subscription.unsubscribe()
+      clearInterval(interval)
+    }
   }, [])
 
   return (
