@@ -25,6 +25,11 @@ export async function middleware(request: NextRequest) {
 
   const { data: { user } } = await supabase.auth.getUser()
 
+  // Allow auth callback through
+  if (request.nextUrl.pathname.startsWith('/auth/callback')) {
+    return response
+  }
+
   // If on login page, allow through
   if (request.nextUrl.pathname === '/login') {
     // If already logged in with valid domain, redirect to home
