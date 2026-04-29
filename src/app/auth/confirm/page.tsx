@@ -7,23 +7,26 @@ const ALLOWED_DOMAINS = ['belonghome.com', 'belong.pe']
 export default function AuthConfirm() {
   useEffect(() => {
     const handleAuth = async () => {
-      const { data: { session } } = await supabase.auth.getSession()
-      
-      if (session?.user) {
-        const email = session.user.email || ''
-        if (ALLOWED_DOMAINS.some(d => email.endsWith(`@${d}`))) {
-          window.location.href = '/'
-        } else {
-          await supabase.auth.signOut()
-          window.location.href = '/login?error=domain'
+      // Listen for auth state change — Supabase auto-processes the hash
+      const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+        if (event === 'SIGNED_IN' && session?.user) {
+          subscription.unsubscribe()
+          const email = session.user.email || ''
+          if (ALLOWED_DOMAINS.some(d => email.endsWith(`@${d}`))) {
+            window.location.replace('/')
+          } else {
+            await supabase.auth.signOut()
+            window.location.replace('/login?error=domain')
+          }
+        } else if (event === 'INITIAL_SESSION' && !session) {
+          // No session found after timeout
+          setTimeout(() => {
+            window.location.replace('/login?error=auth')
+          }, 3000)
         }
-      } else {
-        window.location.href = '/login?error=auth'
-      }
+      })
     }
-
-    // Small delay to let Supabase process the hash
-    setTimeout(handleAuth, 500)
+    handleAuth()
   }, [])
 
   return (
