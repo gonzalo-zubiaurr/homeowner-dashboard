@@ -2,13 +2,6 @@
 import { useEffect, useState, useCallback, useRef } from 'react'
 import { supabase, CHECKLIST_ITEMS, computeStatus, STATUS_CONFIG, type Lease, type ChecklistMap, type ComputedStatus } from '@/lib/supabase'
 
-const CONCIERGE_TEAMS: Record<string, string[]> = {
-  'Team A': ['Maria Rodriguez', 'Sandra Torres', 'Aaron Miranda', 'Marco Estevez'],
-  'Team B': ['Belen Manrique Huaranga', 'Vanessa Ortiz Calle', 'Luisa Ramos Palacios'],
-  'Team C': ['Mauricio Rivas', 'Enzo Estrada Masgo', 'Anahi Soto Delgado', 'Andre Martorana'],
-  'Team D': ['Geraldine Andicoechea', 'Silvana Morán', 'George Moran', 'Luisa Ramos Palacios'],
-}
-
 function Badge({ label, color, bg }: { label: string; color: string; bg: string }) {
   return <span style={{ padding: '2px 8px', borderRadius: 999, fontSize: 11, fontWeight: 700, color, background: bg, border: `1px solid ${color}30`, whiteSpace: 'nowrap' as const, fontFamily: 'Montserrat, sans-serif' }}>{label}</span>
 }
@@ -31,30 +24,90 @@ function CheckProgress({ done, total }: { done: number; total: number }) {
   )
 }
 
+// Multi-select dropdown component
+function MultiSelect({ label, options, selected, onChange }: { label: string; options: string[]; selected: string[]; onChange: (v: string[]) => void }) {
+  const [open, setOpen] = useState(false)
+  const ref = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    const handler = (e: MouseEvent) => { if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false) }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [])
+  const toggle = (v: string) => onChange(selected.includes(v) ? selected.filter(s => s !== v) : [...selected, v])
+  return (
+    <div ref={ref} style={{ position: 'relative' }}>
+      <button onClick={() => setOpen(!open)} style={{ ...selectStyle, display: 'flex', alignItems: 'center', gap: 6, minWidth: 150 }}>
+        <span style={{ flex: 1, textAlign: 'left', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+          {selected.length === 0 ? label : selected.length === 1 ? selected[0] : `${selected.length} selected`}
+        </span>
+        <span style={{ fontSize: 10, color: '#94A3B8' }}>▼</span>
+      </button>
+      {open && (
+        <div style={{ position: 'absolute', top: '100%', left: 0, zIndex: 200, background: '#fff', border: '1.5px solid #E2E8F0', borderRadius: 8, boxShadow: '0 4px 16px rgba(0,0,0,0.1)', minWidth: 200, maxHeight: 260, overflowY: 'auto', marginTop: 4 }}>
+          {selected.length > 0 && (
+            <button onClick={() => onChange([])} style={{ width: '100%', padding: '8px 12px', background: 'none', border: 'none', borderBottom: '1px solid #F0F4F8', cursor: 'pointer', fontSize: 11, color: '#DC2626', fontWeight: 700, textAlign: 'left', fontFamily: 'Montserrat, sans-serif' }}>Clear all</button>
+          )}
+          {options.map(opt => (
+            <label key={opt} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 12px', cursor: 'pointer', borderBottom: '1px solid #F8FAFC' }}>
+              <input type="checkbox" checked={selected.includes(opt)} onChange={() => toggle(opt)} style={{ accentColor: '#2C4F6B' }} />
+              <span style={{ fontSize: 12, color: '#1A3A5C', fontFamily: 'Montserrat, sans-serif' }}>{opt}</span>
+            </label>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+// Date filter component
+function DateFilter({ filterMonth, filterRange, onMonthChange, onRangeChange }: {
+  filterMonth: string; filterRange: { from: string; to: string };
+  onMonthChange: (v: string) => void; onRangeChange: (v: { from: string; to: string }) => void
+}) {
+  const [mode, setMode] = useState<'month' | 'range'>('month')
+  const months = ['Jan 2026','Feb 2026','Mar 2026','Apr 2026','May 2026','Jun 2026','Jul 2026','Aug 2026','Sep 2026','Oct 2026','Nov 2026','Dec 2026',
+                  'Jan 2027','Feb 2027','Mar 2027','Apr 2027','May 2027','Jun 2027']
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+      <div style={{ display: 'flex', borderRadius: 6, border: '1.5px solid #E2E8F0', overflow: 'hidden' }}>
+        {(['month', 'range'] as const).map(m => (
+          <button key={m} onClick={() => { setMode(m); onMonthChange(''); onRangeChange({ from: '', to: '' }) }}
+            style={{ padding: '6px 10px', border: 'none', background: mode === m ? '#2C4F6B' : '#F8FAFC', color: mode === m ? '#fff' : '#64748B', cursor: 'pointer', fontSize: 11, fontWeight: 700, fontFamily: 'Montserrat, sans-serif' }}>
+            {m === 'month' ? 'Month' : 'Range'}
+          </button>
+        ))}
+      </div>
+      {mode === 'month' ? (
+        <select value={filterMonth} onChange={e => onMonthChange(e.target.value)} style={selectStyle}>
+          <option value="">All Months</option>
+          {months.map(m => <option key={m} value={m}>{m}</option>)}
+        </select>
+      ) : (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+          <input type="date" value={filterRange.from} onChange={e => onRangeChange({ ...filterRange, from: e.target.value })} style={{ ...selectStyle, width: 130 }} />
+          <span style={{ fontSize: 11, color: '#94A3B8' }}>→</span>
+          <input type="date" value={filterRange.to} onChange={e => onRangeChange({ ...filterRange, to: e.target.value })} style={{ ...selectStyle, width: 130 }} />
+        </div>
+      )}
+    </div>
+  )
+}
+
 type SidePanelProps = {
-  lease: Lease
-  checklist: Record<string, boolean>
-  onClose: () => void
+  lease: Lease; checklist: Record<string, boolean>; onClose: () => void
   onToggle: (homeId: string, key: string, current: boolean) => void
-  onUpdateLease: (leaseId: string, updates: Partial<Lease>) => void
-  toggling: Set<string>
+  onUpdateLease: (leaseId: string, updates: Partial<Lease>) => void; toggling: Set<string>
 }
 
 function SidePanel({ lease, checklist, onClose, onToggle, onUpdateLease, toggling }: SidePanelProps) {
   const done = CHECKLIST_ITEMS.filter(i => checklist[i.key]).length
   const status = computeStatus(lease, done)
-  const cfg = STATUS_CONFIG[status]
   const [notes, setNotes] = useState(lease.notes || '')
   const [saving, setSaving] = useState(false)
-  const saveNotes = async () => {
-    setSaving(true)
-    await onUpdateLease(lease.lease_id, { notes })
-    setSaving(false)
-  }
+  const saveNotes = async () => { setSaving(true); await onUpdateLease(lease.lease_id, { notes }); setSaving(false) }
 
   return (
     <div style={{ position: 'fixed', top: 0, right: 0, width: 480, height: '100vh', background: '#fff', boxShadow: '-4px 0 24px rgba(0,0,0,0.12)', zIndex: 100, display: 'flex', flexDirection: 'column', overflowY: 'auto' }}>
-      {/* Header */}
       <div style={{ padding: '20px 24px 16px', borderBottom: '1px solid #E2E8F0', background: lease.escalated ? '#FFF5F5' : '#fff' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
           <div style={{ flex: 1 }}>
@@ -62,7 +115,7 @@ function SidePanel({ lease, checklist, onClose, onToggle, onUpdateLease, togglin
               {lease.escalated && <span style={{ fontSize: 13 }}>🚨</span>}
               <span style={{ fontSize: 15, fontWeight: 700, color: '#1A3A5C', fontFamily: 'Montserrat, sans-serif' }}>{lease.homeowner_name}</span>
             </div>
-            <a href={lease.lease_link} target="_blank" rel="noreferrer" style={{ fontSize: 12, color: '#2C4F6B', fontFamily: 'Montserrat, sans-serif', textDecoration: 'underline' }}>{lease.address}</a>
+            <a href={`https://foundation.bln.hm/homes/${lease.home_id}`} target="_blank" rel="noreferrer" style={{ fontSize: 12, color: '#2C4F6B', fontFamily: 'Montserrat, sans-serif', textDecoration: 'underline' }}>{lease.address}</a>
           </div>
           <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 20, color: '#94A3B8', padding: 4 }}>✕</button>
         </div>
@@ -75,7 +128,6 @@ function SidePanel({ lease, checklist, onClose, onToggle, onUpdateLease, togglin
       </div>
 
       <div style={{ padding: '16px 24px', flex: 1 }}>
-        {/* Lease details */}
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 20 }}>
           {[
             { label: 'Concierge', value: lease.concierge },
@@ -94,11 +146,17 @@ function SidePanel({ lease, checklist, onClose, onToggle, onUpdateLease, togglin
           ))}
         </div>
 
-        {/* Open payable warning */}
+        {/* Failed months detail */}
         {lease.open_payable_balance > 0 && (
-          <div style={{ background: '#FEF2F2', border: '1px solid #FCA5A5', borderRadius: 8, padding: '10px 14px', marginBottom: 16 }}>
-            <div style={{ fontSize: 12, fontWeight: 700, color: '#DC2626', fontFamily: 'Montserrat, sans-serif' }}>⚠️ Open Balance: ${lease.open_payable_balance?.toLocaleString()}</div>
-            {lease.first_open_payable_month && <div style={{ fontSize: 11, color: '#B91C1C', fontFamily: 'Montserrat, sans-serif', marginTop: 2 }}>{lease.first_open_payable_month}{lease.last_open_payable_month !== lease.first_open_payable_month ? ` – ${lease.last_open_payable_month}` : ''}</div>}
+          <div style={{ background: '#FEF2F2', border: '1px solid #FCA5A5', borderRadius: 8, padding: '12px 14px', marginBottom: 16 }}>
+            <div style={{ fontSize: 12, fontWeight: 700, color: '#DC2626', fontFamily: 'Montserrat, sans-serif', marginBottom: 6 }}>
+              ⚠️ {lease.open_payable_count} Failed Month{lease.open_payable_count !== 1 ? 's' : ''} — ${lease.open_payable_balance?.toLocaleString()} outstanding
+            </div>
+            {lease.first_open_payable_month && (
+              <div style={{ fontSize: 11, color: '#B91C1C', fontFamily: 'Montserrat, sans-serif' }}>
+                Period: {lease.first_open_payable_month}{lease.last_open_payable_month && lease.last_open_payable_month !== lease.first_open_payable_month ? ` → ${lease.last_open_payable_month}` : ''}
+              </div>
+            )}
           </div>
         )}
 
@@ -113,7 +171,7 @@ function SidePanel({ lease, checklist, onClose, onToggle, onUpdateLease, togglin
               return (
                 <button key={item.key} onClick={() => onToggle(lease.home_id, item.key, isDone)} disabled={isToggling}
                   style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', borderRadius: 8, background: isDone ? '#E8FBF5' : '#F8FAFC', border: `1.5px solid ${isDone ? '#2DD4A040' : '#E2E8F0'}`, cursor: 'pointer', fontFamily: 'Montserrat, sans-serif', opacity: isToggling ? 0.6 : 1, transition: 'all 0.15s' }}>
-                  <div style={{ width: 20, height: 20, borderRadius: 5, border: `2px solid ${isDone ? '#2DD4A0' : '#CBD5E1'}`, background: isDone ? '#2DD4A0' : 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, transition: 'all 0.15s' }}>
+                  <div style={{ width: 20, height: 20, borderRadius: 5, border: `2px solid ${isDone ? '#2DD4A0' : '#CBD5E1'}`, background: isDone ? '#2DD4A0' : 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
                     {isDone && <span style={{ color: '#fff', fontSize: 11, fontWeight: 700 }}>✓</span>}
                   </div>
                   <span style={{ fontSize: 13 }}>{item.icon}</span>
@@ -124,7 +182,7 @@ function SidePanel({ lease, checklist, onClose, onToggle, onUpdateLease, togglin
           </div>
         </div>
 
-        {/* Manual status override */}
+        {/* Manual status */}
         <div style={{ marginBottom: 16 }}>
           <div style={{ fontSize: 11, fontWeight: 700, color: '#94A3B8', letterSpacing: '0.06em', marginBottom: 8, fontFamily: 'Montserrat, sans-serif' }}>MANUAL STATUS</div>
           <div style={{ display: 'flex', gap: 8 }}>
@@ -167,15 +225,17 @@ export default function Dashboard() {
 
   // Filters
   const [search, setSearch] = useState('')
-  const [filterConcierge, setFilterConcierge] = useState('')
+  const [filterConcierges, setFilterConcierges] = useState<string[]>([])
   const [filterStatus, setFilterStatus] = useState<ComputedStatus | ''>('')
-  const [filterPayout, setFilterPayout] = useState('')
-  const [filterLeaseType, setFilterLeaseType] = useState('')
+  const [filterPayouts, setFilterPayouts] = useState<string[]>([])
+  const [filterLeaseTypes, setFilterLeaseTypes] = useState<string[]>([])
   const [filterAgreement, setFilterAgreement] = useState('active')
   const [showPaid, setShowPaid] = useState(false)
   const [showEscalated, setShowEscalated] = useState(false)
+  const [filterMonth, setFilterMonth] = useState('')
+  const [filterRange, setFilterRange] = useState({ from: '', to: '' })
   const [hiddenCols, setHiddenCols] = useState<Set<string>>(new Set())
-  const [sortCol, setSortCol] = useState<string>('lease_start_on')
+  const [sortCol, setSortCol] = useState('lease_start_on')
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc')
 
   const flashLive = useCallback(() => {
@@ -250,6 +310,24 @@ export default function Dashboard() {
   const handleSort = (col: string) => { if (sortCol === col) setSortDir(d => d === 'asc' ? 'desc' : 'asc'); else { setSortCol(col); setSortDir('asc') } }
 
   const allConcierges = Array.from(new Set(leases.map(l => l.concierge).filter(Boolean))).sort()
+  const allLeaseTypes = Array.from(new Set(leases.map(l => l.lease_type).filter(Boolean))).sort()
+
+  const matchesDate = (lease: Lease) => {
+    const d = lease.lease_start_on ? new Date(lease.lease_start_on) : null
+    if (!d) return !filterMonth && !filterRange.from
+    if (filterMonth) {
+      const [mon, yr] = filterMonth.split(' ')
+      const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
+      return d.getMonth() === months.indexOf(mon) && d.getFullYear() === parseInt(yr)
+    }
+    if (filterRange.from || filterRange.to) {
+      const from = filterRange.from ? new Date(filterRange.from) : null
+      const to = filterRange.to ? new Date(filterRange.to) : null
+      if (from && d < from) return false
+      if (to && d > to) return false
+    }
+    return true
+  }
 
   const filtered = leases.filter(l => {
     const done = CHECKLIST_ITEMS.filter(i => checklist[l.home_id]?.[i.key]).length
@@ -258,14 +336,11 @@ export default function Dashboard() {
     if (filterAgreement === 'active' && l.agreement_status?.toLowerCase() !== 'active') return false
     if (filterAgreement === 'inactive' && l.agreement_status?.toLowerCase() !== 'inactive') return false
     if (filterStatus && status !== filterStatus) return false
-    if (filterPayout && l.payout_plan !== filterPayout) return false
-    if (filterLeaseType && l.lease_type !== filterLeaseType) return false
+    if (filterPayouts.length > 0 && !filterPayouts.includes(l.payout_plan)) return false
+    if (filterLeaseTypes.length > 0 && !filterLeaseTypes.includes(l.lease_type)) return false
+    if (filterConcierges.length > 0 && !filterConcierges.includes(l.concierge)) return false
     if (showEscalated && !l.escalated) return false
-    if (filterConcierge) {
-      const teamMembers = CONCIERGE_TEAMS[filterConcierge]
-      if (teamMembers) { if (!teamMembers.includes(l.concierge)) return false }
-      else if (l.concierge !== filterConcierge) return false
-    }
+    if (!matchesDate(l)) return false
     if (search) {
       const q = search.toLowerCase()
       if (!l.homeowner_name?.toLowerCase().includes(q) && !l.address?.toLowerCase().includes(q) && !l.concierge?.toLowerCase().includes(q)) return false
@@ -275,7 +350,6 @@ export default function Dashboard() {
     const aDone = CHECKLIST_ITEMS.filter(i => checklist[a.home_id]?.[i.key]).length
     const bDone = CHECKLIST_ITEMS.filter(i => checklist[b.home_id]?.[i.key]).length
     const aStatus = computeStatus(a, aDone); const bStatus = computeStatus(b, bDone)
-    // Escalated always first
     if (a.escalated && !b.escalated) return -1
     if (!a.escalated && b.escalated) return 1
     let av: any, bv: any
@@ -299,15 +373,22 @@ export default function Dashboard() {
     { key: 'payout_plan', label: 'Payout Plan' },
     { key: 'lease_type', label: 'Lease Type' },
     { key: 'open_payable_balance', label: 'Open Balance' },
+    { key: 'failed_months', label: 'Failed Months' },
     { key: 'status', label: 'Status' },
     { key: 'checklist', label: 'Setup' },
   ]
 
   const stats = {
-    failed: leases.filter(l => computeStatus(l, CHECKLIST_ITEMS.filter(i => checklist[l.home_id]?.[i.key]).length) === 'failed').length,
-    readyToProcess: leases.filter(l => computeStatus(l, CHECKLIST_ITEMS.filter(i => checklist[l.home_id]?.[i.key]).length) === 'ready_to_process').length,
-    pending: leases.filter(l => computeStatus(l, CHECKLIST_ITEMS.filter(i => checklist[l.home_id]?.[i.key]).length) === 'pending').length,
-    escalated: leases.filter(l => l.escalated).length,
+    failed: filtered.filter(l => computeStatus(l, CHECKLIST_ITEMS.filter(i => checklist[l.home_id]?.[i.key]).length) === 'failed').length,
+    readyToProcess: filtered.filter(l => computeStatus(l, CHECKLIST_ITEMS.filter(i => checklist[l.home_id]?.[i.key]).length) === 'ready_to_process').length,
+    pending: filtered.filter(l => computeStatus(l, CHECKLIST_ITEMS.filter(i => checklist[l.home_id]?.[i.key]).length) === 'pending').length,
+    escalated: filtered.filter(l => l.escalated).length,
+  }
+
+  const clearFilters = () => {
+    setSearch(''); setFilterConcierges([]); setFilterStatus(''); setFilterPayouts([])
+    setFilterLeaseTypes([]); setFilterAgreement('active'); setShowEscalated(false)
+    setFilterMonth(''); setFilterRange({ from: '', to: '' })
   }
 
   if (loading) return (
@@ -320,8 +401,8 @@ export default function Dashboard() {
   return (
     <div style={{ minHeight: '100vh', background: '#F5F7FA', fontFamily: 'Montserrat, sans-serif' }}>
       {/* Header */}
-      <header style={{ background: '#2C4F6B', padding: '0', position: 'sticky', top: 0, zIndex: 50, boxShadow: '0 2px 12px rgba(44,79,107,0.18)' }}>
-        <div style={{ maxWidth: '100%', padding: '13px 24px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
+      <header style={{ background: '#2C4F6B', position: 'sticky', top: 0, zIndex: 50, boxShadow: '0 2px 12px rgba(44,79,107,0.18)' }}>
+        <div style={{ padding: '13px 24px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
             <div style={{ fontSize: 24, fontWeight: 700, color: '#fff', letterSpacing: '-0.5px' }}>belong<span style={{ display: 'inline-block', width: 7, height: 7, borderRadius: '50%', background: '#2DD4A0', marginLeft: 2, verticalAlign: 'middle' }} /></div>
             <div style={{ width: 1, height: 28, background: 'rgba(255,255,255,0.2)' }} />
@@ -346,7 +427,7 @@ export default function Dashboard() {
 
       <div style={{ padding: '20px 24px' }}>
         {/* Alert stats */}
-        <div style={{ display: 'flex', gap: 12, marginBottom: 20, flexWrap: 'wrap' }}>
+        <div style={{ display: 'flex', gap: 12, marginBottom: 20, flexWrap: 'wrap', alignItems: 'center' }}>
           {[
             { label: 'Failed', value: stats.failed, color: '#DC2626', bg: '#FEF2F2', f: 'failed' as ComputedStatus },
             { label: 'Ready to Process', value: stats.readyToProcess, color: '#0891B2', bg: '#ECFEFF', f: 'ready_to_process' as ComputedStatus },
@@ -355,53 +436,42 @@ export default function Dashboard() {
           ].map(s => (
             <button key={s.label} onClick={() => { if (s.f) setFilterStatus(filterStatus === s.f ? '' : s.f); else setShowEscalated(!showEscalated) }}
               style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '12px 18px', borderRadius: 10, background: '#fff', border: `1.5px solid ${(s.f ? filterStatus === s.f : showEscalated) ? s.color : '#E2E8F0'}`, cursor: 'pointer', boxShadow: '0 1px 3px rgba(0,0,0,0.05)', transition: 'all 0.2s' }}>
-              <span style={{ fontSize: 24, fontWeight: 700, color: s.color, fontFamily: 'Montserrat, sans-serif' }}>{s.value}</span>
+              <span style={{ fontSize: 24, fontWeight: 700, color: s.color }}>{s.value}</span>
               <span style={{ fontSize: 11, color: '#64748B', fontWeight: 600 }}>{s.label}</span>
             </button>
           ))}
-          <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 8 }}>
-            <label style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer', fontSize: 12, color: '#64748B', fontWeight: 600 }}>
-              <input type="checkbox" checked={showPaid} onChange={e => setShowPaid(e.target.checked)} />Show Paid
-            </label>
-          </div>
+          <label style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer', fontSize: 12, color: '#64748B', fontWeight: 600, marginLeft: 'auto' }}>
+            <input type="checkbox" checked={showPaid} onChange={e => setShowPaid(e.target.checked)} style={{ accentColor: '#2C4F6B' }} />Show Paid
+          </label>
         </div>
 
         {/* Filters */}
-        <div style={{ display: 'flex', gap: 10, marginBottom: 14, flexWrap: 'wrap', alignItems: 'center', background: '#fff', padding: '14px 16px', borderRadius: 10, border: '1px solid #E2E8F0' }}>
-          <input value={search} onChange={e => setSearch(e.target.value)} placeholder="🔍 Search name, address, concierge…"
-            style={{ flex: 1, minWidth: 200, padding: '8px 12px', borderRadius: 7, border: '1.5px solid #E2E8F0', background: '#F8FAFC', color: '#1A3A5C', fontFamily: 'Montserrat, sans-serif', fontSize: 12, outline: 'none' }} />
-          <select value={filterConcierge} onChange={e => setFilterConcierge(e.target.value)} style={selectStyle}>
-            <option value="">All Concierges</option>
-            {Object.keys(CONCIERGE_TEAMS).map(t => <option key={t} value={t}>{t}</option>)}
-            <optgroup label="Individual">
-              {allConcierges.map(c => <option key={c} value={c}>{c}</option>)}
-            </optgroup>
-          </select>
-          <select value={filterStatus} onChange={e => setFilterStatus(e.target.value as ComputedStatus | '')} style={selectStyle}>
-            <option value="">All Statuses</option>
-            <option value="failed">Failed</option>
-            <option value="ready_to_process">Ready to Process</option>
-            <option value="processing">Processing</option>
-            <option value="ready_to_pay">Ready to Pay</option>
-            <option value="pending">Pending</option>
-            <option value="paid">Paid</option>
-          </select>
-          <select value={filterPayout} onChange={e => setFilterPayout(e.target.value)} style={selectStyle}>
-            <option value="">All Payout Plans</option>
-            <option value="Monthly">Monthly (Guaranteed)</option>
-            <option value="NoGuarantee">No Guarantee</option>
-          </select>
-          <select value={filterLeaseType} onChange={e => setFilterLeaseType(e.target.value)} style={selectStyle}>
-            <option value="">All Lease Types</option>
-            {['New', 'Renewal', 'Turnover', 'Adopted', 'Revised', 'Canceled'].map(t => <option key={t} value={t}>{t}</option>)}
-          </select>
-          <select value={filterAgreement} onChange={e => setFilterAgreement(e.target.value)} style={selectStyle}>
-            <option value="active">Active Agreements</option>
-            <option value="inactive">Inactive Agreements</option>
-            <option value="">All Agreements</option>
-          </select>
-          <button onClick={() => { setSearch(''); setFilterConcierge(''); setFilterStatus(''); setFilterPayout(''); setFilterLeaseType(''); setFilterAgreement('active'); setShowEscalated(false) }}
-            style={{ padding: '8px 12px', borderRadius: 7, border: '1.5px solid #E2E8F0', background: '#F8FAFC', color: '#94A3B8', cursor: 'pointer', fontSize: 11, fontWeight: 700 }}>Clear</button>
+        <div style={{ background: '#fff', padding: '14px 16px', borderRadius: 10, border: '1px solid #E2E8F0', marginBottom: 14 }}>
+          <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center', marginBottom: 10 }}>
+            <input value={search} onChange={e => setSearch(e.target.value)} placeholder="🔍 Search name, address, concierge…"
+              style={{ flex: 1, minWidth: 200, padding: '8px 12px', borderRadius: 7, border: '1.5px solid #E2E8F0', background: '#F8FAFC', color: '#1A3A5C', fontFamily: 'Montserrat, sans-serif', fontSize: 12, outline: 'none' }} />
+            <select value={filterStatus} onChange={e => setFilterStatus(e.target.value as ComputedStatus | '')} style={selectStyle}>
+              <option value="">All Statuses</option>
+              <option value="failed">Failed</option>
+              <option value="ready_to_process">Ready to Process</option>
+              <option value="processing">Processing</option>
+              <option value="ready_to_pay">Ready to Pay</option>
+              <option value="pending">Pending</option>
+              <option value="paid">Paid</option>
+            </select>
+            <select value={filterAgreement} onChange={e => setFilterAgreement(e.target.value)} style={selectStyle}>
+              <option value="active">Active Agreements</option>
+              <option value="inactive">Inactive Agreements</option>
+              <option value="">All Agreements</option>
+            </select>
+            <button onClick={clearFilters} style={{ padding: '8px 12px', borderRadius: 7, border: '1.5px solid #E2E8F0', background: '#F8FAFC', color: '#94A3B8', cursor: 'pointer', fontSize: 11, fontWeight: 700 }}>Clear All</button>
+          </div>
+          <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center' }}>
+            <MultiSelect label="All Concierges" options={allConcierges} selected={filterConcierges} onChange={setFilterConcierges} />
+            <MultiSelect label="All Payout Plans" options={['Monthly', 'NoGuarantee']} selected={filterPayouts} onChange={setFilterPayouts} />
+            <MultiSelect label="All Lease Types" options={allLeaseTypes} selected={filterLeaseTypes} onChange={setFilterLeaseTypes} />
+            <DateFilter filterMonth={filterMonth} filterRange={filterRange} onMonthChange={setFilterMonth} onRangeChange={setFilterRange} />
+          </div>
         </div>
 
         {/* Column visibility */}
@@ -424,7 +494,7 @@ export default function Dashboard() {
                 <tr style={{ background: '#F8FAFC', borderBottom: '2px solid #E2E8F0' }}>
                   {cols.filter(c => !hiddenCols.has(c.key)).map(c => (
                     <th key={c.key} onClick={() => handleSort(c.key)}
-                      style={{ padding: '11px 14px', textAlign: 'left', fontSize: 10, fontWeight: 700, color: '#94A3B8', letterSpacing: '0.06em', cursor: 'pointer', whiteSpace: 'nowrap', userSelect: 'none', position: c.frozen ? 'sticky' : 'static', left: c.key === 'address' ? 0 : c.key === 'concierge' ? 220 : 'auto', background: '#F8FAFC', zIndex: c.frozen ? 2 : 'auto' }}>
+                      style={{ padding: '11px 14px', textAlign: 'left', fontSize: 10, fontWeight: 700, color: '#94A3B8', letterSpacing: '0.06em', cursor: 'pointer', whiteSpace: 'nowrap', userSelect: 'none', position: c.frozen ? 'sticky' as const : 'static' as const, left: c.key === 'address' ? 0 : c.key === 'concierge' ? 220 : 'auto', background: '#F8FAFC', zIndex: c.frozen ? 2 : 'auto' }}>
                       {c.label.toUpperCase()} {sortCol === c.key ? (sortDir === 'asc' ? '↑' : '↓') : ''}
                     </th>
                   ))}
@@ -436,13 +506,13 @@ export default function Dashboard() {
                 ) : filtered.map((lease, idx) => {
                   const done = CHECKLIST_ITEMS.filter(i => checklist[lease.home_id]?.[i.key]).length
                   const status = computeStatus(lease, done)
-                  const cfg = STATUS_CONFIG[status]
                   const isSelected = selectedLease?.lease_id === lease.lease_id
+                  const rowBg = lease.escalated ? '#FFF5F5' : isSelected ? '#F0F4FF' : idx % 2 === 0 ? '#fff' : '#FAFBFC'
                   return (
                     <tr key={lease.lease_id} onClick={() => setSelectedLease(isSelected ? null : lease)}
-                      style={{ borderBottom: '1px solid #F0F4F8', background: lease.escalated ? '#FFF5F5' : isSelected ? '#F0F4FF' : idx % 2 === 0 ? '#fff' : '#FAFBFC', cursor: 'pointer', transition: 'background 0.15s' }}>
+                      style={{ borderBottom: '1px solid #F0F4F8', background: rowBg, cursor: 'pointer', transition: 'background 0.15s' }}>
                       {!hiddenCols.has('address') && (
-                        <td style={{ padding: '11px 14px', position: 'sticky', left: 0, background: lease.escalated ? '#FFF5F5' : isSelected ? '#F0F4FF' : idx % 2 === 0 ? '#fff' : '#FAFBFC', zIndex: 1, maxWidth: 220, minWidth: 180 }}>
+                        <td style={{ padding: '11px 14px', position: 'sticky', left: 0, background: rowBg, zIndex: 1, maxWidth: 220, minWidth: 180 }}>
                           <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                             {lease.escalated && <span style={{ fontSize: 12 }}>🚨</span>}
                             <a href={`https://foundation.bln.hm/homes/${lease.home_id}`} target="_blank" rel="noreferrer" onClick={e => e.stopPropagation()}
@@ -450,22 +520,26 @@ export default function Dashboard() {
                           </div>
                         </td>
                       )}
-                      {!hiddenCols.has('concierge') && <td style={{ padding: '11px 14px', position: 'sticky', left: hiddenCols.has('address') ? 0 : 220, background: lease.escalated ? '#FFF5F5' : isSelected ? '#F0F4FF' : idx % 2 === 0 ? '#fff' : '#FAFBFC', zIndex: 1, whiteSpace: 'nowrap', color: '#1A3A5C', fontWeight: 500 }}>{lease.concierge}</td>}
+                      {!hiddenCols.has('concierge') && <td style={{ padding: '11px 14px', position: 'sticky', left: hiddenCols.has('address') ? 0 : 220, background: rowBg, zIndex: 1, whiteSpace: 'nowrap', color: '#1A3A5C', fontWeight: 500 }}>{lease.concierge}</td>}
                       {!hiddenCols.has('homeowner_name') && <td style={{ padding: '11px 14px', color: '#1A3A5C', fontWeight: 600, whiteSpace: 'nowrap' }}>{lease.homeowner_name}</td>}
                       {!hiddenCols.has('lease_start_on') && (
                         <td style={{ padding: '11px 14px', whiteSpace: 'nowrap' }}>
-                          {lease.lease_start_on ? (
-                            <a href={lease.lease_link} target="_blank" rel="noreferrer" onClick={e => e.stopPropagation()}
-                              style={{ color: '#2C4F6B', textDecoration: 'underline', fontWeight: 600 }}>
-                              {new Date(lease.lease_start_on).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
-                            </a>
-                          ) : '—'}
+                          {lease.lease_start_on
+                            ? <a href={lease.lease_link} target="_blank" rel="noreferrer" onClick={e => e.stopPropagation()} style={{ color: '#2C4F6B', textDecoration: 'underline', fontWeight: 600 }}>{new Date(lease.lease_start_on).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</a>
+                            : '—'}
                         </td>
                       )}
                       {!hiddenCols.has('rent_amount') && <td style={{ padding: '11px 14px', color: '#1A3A5C', fontWeight: 600, whiteSpace: 'nowrap' }}>${lease.rent_amount?.toLocaleString()}</td>}
                       {!hiddenCols.has('payout_plan') && <td style={{ padding: '11px 14px' }}><Badge label={lease.payout_plan === 'Monthly' ? '● Guaranteed' : '○ No Guarantee'} color={lease.payout_plan === 'Monthly' ? '#1A3A5C' : '#94A3B8'} bg={lease.payout_plan === 'Monthly' ? '#EEF3F7' : '#F8FAFC'} /></td>}
                       {!hiddenCols.has('lease_type') && <td style={{ padding: '11px 14px' }}><Badge label={lease.lease_type} color='#6D28D9' bg='#F5F3FF' /></td>}
                       {!hiddenCols.has('open_payable_balance') && <td style={{ padding: '11px 14px', color: lease.open_payable_balance > 0 ? '#DC2626' : '#94A3B8', fontWeight: lease.open_payable_balance > 0 ? 700 : 400 }}>{lease.open_payable_balance > 0 ? `$${lease.open_payable_balance?.toLocaleString()}` : '—'}</td>}
+                      {!hiddenCols.has('failed_months') && (
+                        <td style={{ padding: '11px 14px', whiteSpace: 'nowrap' }}>
+                          {lease.open_payable_count > 0
+                            ? <span style={{ color: '#DC2626', fontWeight: 700 }}>{lease.open_payable_count} mo{lease.first_open_payable_month ? ` (${lease.first_open_payable_month}${lease.last_open_payable_month && lease.last_open_payable_month !== lease.first_open_payable_month ? `→${lease.last_open_payable_month}` : ''})` : ''}</span>
+                            : <span style={{ color: '#94A3B8' }}>—</span>}
+                        </td>
+                      )}
                       {!hiddenCols.has('status') && <td style={{ padding: '11px 14px' }}><StatusBadge status={status} /></td>}
                       {!hiddenCols.has('checklist') && <td style={{ padding: '11px 14px' }}><CheckProgress done={done} total={CHECKLIST_ITEMS.length} /></td>}
                     </tr>
@@ -475,11 +549,9 @@ export default function Dashboard() {
             </table>
           </div>
         </div>
-
         <div style={{ marginTop: 20, textAlign: 'center', color: '#CBD5E1', fontSize: 11 }}>belong · Homeowner Payouts Dashboard · Internal Use Only</div>
       </div>
 
-      {/* Side panel overlay */}
       {selectedLease && (
         <>
           <div onClick={() => setSelectedLease(null)} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.2)', zIndex: 99 }} />
