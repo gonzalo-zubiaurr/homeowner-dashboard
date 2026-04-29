@@ -1,20 +1,24 @@
-@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600&family=DM+Mono:wght@400;500&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@300;400;500;600;700&display=swap');
 
 :root {
-  --bg:        #0f1117;
-  --surface:   #181c27;
-  --surface2:  #1e2333;
-  --border:    #2a3045;
-  --border2:   #3a4460;
-  --text:      #e8ecf4;
-  --text-muted:#8892a4;
-  --accent:    #4f7cff;
-  --accent-hover: #6b93ff;
-  --success:   #22c55e;
-  --success-bg:#0d2e1a;
-  --warn:      #f59e0b;
-  --warn-bg:   #2a1f07;
-  --danger:    #ef4444;
+  --bg:          #F5F7FA;
+  --surface:     #FFFFFF;
+  --surface2:    #F0F4F8;
+  --border:      #E2E8F0;
+  --border2:     #CBD5E1;
+  --text:        #1A3A5C;
+  --text-muted:  #64748B;
+  --accent:      #2C4F6B;
+  --accent-hover:#1A3A5C;
+  --teal:        #2DD4A0;
+  --teal-bg:     #E8FBF5;
+  --success:     #2DD4A0;
+  --success-bg:  #E8FBF5;
+  --success-text:#0A6B4A;
+  --warn:        #F59E0B;
+  --warn-bg:     #FFFBEB;
+  --danger:      #EF4444;
+  --danger-bg:   #FEF2F2;
 }
 
 * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -22,12 +26,11 @@
 html, body {
   background: var(--bg);
   color: var(--text);
-  font-family: 'DM Sans', sans-serif;
+  font-family: 'Montserrat', sans-serif;
   font-size: 14px;
   min-height: 100vh;
 }
 
-/* Scrollbar */
 ::-webkit-scrollbar { width: 6px; }
 ::-webkit-scrollbar-track { background: var(--bg); }
 ::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 3px; }
