@@ -28,7 +28,7 @@ export async function POST(req: NextRequest) {
       if (row.length > 3) rows.push(row)
     }
 
-    const homes = [...new Set(rows.map(r => get(r, 'HomeId')).filter(Boolean))].map(id => {
+    const homes = Array.from(new Set(rows.map(r => get(r, 'HomeId')).filter(Boolean))).map(id => {
       const r = rows.find(r => get(r, 'HomeId') === id)!
       return { home_id: id, home_link: get(r, 'HomeLink') }
     })
