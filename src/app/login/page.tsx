@@ -19,8 +19,9 @@ export default function LoginPage() {
     const { error } = await supabase.auth.signInWithOAuth({
       provider: 'google',
       options: {
-        redirectTo: `${window.location.origin}/auth/callback`,
+        redirectTo: `${window.location.origin}/auth/confirm`,
         queryParams: { hd: 'belonghome.com' },
+        skipBrowserRedirect: false,
       },
     })
     if (error) { setError(error.message); setLoading(false) }
