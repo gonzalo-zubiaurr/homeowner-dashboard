@@ -416,14 +416,14 @@ export default function Dashboard() {
     { key: 'address', label: 'Address', frozen: true },
     { key: 'concierge', label: 'Concierge', frozen: true },
     { key: 'homeowner_name', label: 'Homeowner' },
+    { key: 'status', label: 'Status' },
     { key: 'checklist', label: 'Setup' },
     { key: 'lease_start_on', label: 'Lease Start' },
     { key: 'rent_amount', label: 'Rent' },
     { key: 'payout_plan', label: 'Payout Plan' },
     { key: 'lease_type', label: 'Lease Type' },
+    { key: 'failed_months', label: 'Open Months' },
     { key: 'open_payable_balance', label: 'Open Balance' },
-    { key: 'failed_months', label: 'Failed Months' },
-    { key: 'status', label: 'Status' },
   ]
 
   const stats = {
@@ -484,8 +484,8 @@ export default function Dashboard() {
           ].map(s => (
             <button key={s.label} onClick={() => { if (s.f) setFilterStatus(filterStatus === s.f ? '' : s.f); else setShowEscalated(!showEscalated) }}
               style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '12px 18px', borderRadius: 10, background: '#fff', border: `1.5px solid ${(s.f ? filterStatus === s.f : showEscalated) ? s.color : '#E2E8F0'}`, cursor: 'pointer', boxShadow: '0 1px 3px rgba(0,0,0,0.05)', transition: 'all 0.2s' }}>
-              <span style={{ fontSize: 24, fontWeight: 700, color: s.color }}>{s.value}</span>
-              <span style={{ fontSize: 11, color: '#64748B', fontWeight: 600 }}>{s.label}</span>
+              <span style={{ fontSize: 24, fontWeight: 700, color: s.color, fontFamily: 'Montserrat, sans-serif' }}>{s.value}</span>
+              <span style={{ fontSize: 11, color: '#64748B', fontWeight: 600, fontFamily: 'Montserrat, sans-serif' }}>{s.label}</span>
             </button>
           ))}
           <label style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer', fontSize: 12, color: '#64748B', fontWeight: 600, marginLeft: 'auto' }}>
@@ -570,6 +570,8 @@ export default function Dashboard() {
                       )}
                       {!hiddenCols.has('concierge') && <td style={{ padding: '11px 14px', position: 'sticky', left: hiddenCols.has('address') ? 0 : 220, background: rowBg, zIndex: 1, whiteSpace: 'nowrap', color: '#1A3A5C', fontWeight: 500 }}>{lease.concierge}</td>}
                       {!hiddenCols.has('homeowner_name') && <td style={{ padding: '11px 14px', whiteSpace: 'nowrap' }}>{lease.homeowner_link ? <a href={lease.homeowner_link} target="_blank" rel="noreferrer" onClick={e => e.stopPropagation()} style={{ color: '#2C4F6B', fontWeight: 600, textDecoration: 'underline' }}>{lease.homeowner_name}</a> : <span style={{ color: '#1A3A5C', fontWeight: 600 }}>{lease.homeowner_name}</span>}</td>}
+                      {!hiddenCols.has('status') && <td style={{ padding: '11px 14px' }}><StatusBadge status={status} /></td>}
+                      {!hiddenCols.has('checklist') && <td style={{ padding: '11px 14px' }}><CheckProgress done={done} total={CHECKLIST_ITEMS.length} /></td>}
                       {!hiddenCols.has('lease_start_on') && (
                         <td style={{ padding: '11px 14px', whiteSpace: 'nowrap' }}>
                           {lease.lease_start_on
@@ -580,7 +582,6 @@ export default function Dashboard() {
                       {!hiddenCols.has('rent_amount') && <td style={{ padding: '11px 14px', color: '#1A3A5C', fontWeight: 600, whiteSpace: 'nowrap' }}>${lease.rent_amount?.toLocaleString()}</td>}
                       {!hiddenCols.has('payout_plan') && <td style={{ padding: '11px 14px' }}><Badge label={lease.payout_plan === 'Monthly' ? '● Guaranteed' : '○ No Guarantee'} color={lease.payout_plan === 'Monthly' ? '#1A3A5C' : '#94A3B8'} bg={lease.payout_plan === 'Monthly' ? '#EEF3F7' : '#F8FAFC'} /></td>}
                       {!hiddenCols.has('lease_type') && <td style={{ padding: '11px 14px' }}><Badge label={lease.lease_type} color='#6D28D9' bg='#F5F3FF' /></td>}
-                      {!hiddenCols.has('open_payable_balance') && <td style={{ padding: '11px 14px', color: lease.open_payable_balance > 0 ? '#DC2626' : '#94A3B8', fontWeight: lease.open_payable_balance > 0 ? 700 : 400 }}>{lease.open_payable_balance > 0 ? `$${lease.open_payable_balance?.toLocaleString()}` : '—'}</td>}
                       {!hiddenCols.has('failed_months') && (
                         <td style={{ padding: '11px 14px', whiteSpace: 'nowrap' }}>
                           {lease.open_payable_count > 0
@@ -588,8 +589,7 @@ export default function Dashboard() {
                             : <span style={{ color: '#94A3B8' }}>—</span>}
                         </td>
                       )}
-                      {!hiddenCols.has('status') && <td style={{ padding: '11px 14px' }}><StatusBadge status={status} /></td>}
-                      {!hiddenCols.has('checklist') && <td style={{ padding: '11px 14px' }}><CheckProgress done={done} total={CHECKLIST_ITEMS.length} /></td>}
+                      {!hiddenCols.has('open_payable_balance') && <td style={{ padding: '11px 14px', color: lease.open_payable_balance > 0 ? '#DC2626' : '#94A3B8', fontWeight: lease.open_payable_balance > 0 ? 700 : 400 }}>{lease.open_payable_balance > 0 ? `$${lease.open_payable_balance?.toLocaleString()}` : '—'}</td>}
                     </tr>
                   )
                 })}
