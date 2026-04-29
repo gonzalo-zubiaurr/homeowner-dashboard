@@ -108,6 +108,9 @@ function SidePanel({ lease, checklist, onClose, onToggle, onUpdateLease, togglin
   const [saving, setSaving] = useState(false)
   const saveNotes = async () => { setSaving(true); await onUpdateLease(lease.lease_id, { notes }); setSaving(false) }
   const saveIntercom = async () => { setSavingIntercom(true); await onUpdateLease(lease.lease_id, { intercom_link: intercomLink }); setSavingIntercom(false) }
+  const [escalationSlackLink, setEscalationSlackLink] = useState(lease.escalation_slack_link || '')
+  const [savingSlack, setSavingSlack] = useState(false)
+  const saveSlack = async () => { setSavingSlack(true); await onUpdateLease(lease.lease_id, { escalation_slack_link: escalationSlackLink }); setSavingSlack(false) }
 
   return (
     <div style={{ position: 'fixed', top: 0, right: 0, width: 480, height: '100vh', background: '#fff', boxShadow: '-4px 0 24px rgba(0,0,0,0.12)', zIndex: 100, display: 'flex', flexDirection: 'column', overflowY: 'auto' }}>
@@ -156,10 +159,24 @@ function SidePanel({ lease, checklist, onClose, onToggle, onUpdateLease, togglin
               ⚠️ {lease.open_payable_count} Failed Month{lease.open_payable_count !== 1 ? 's' : ''} — ${lease.open_payable_balance?.toLocaleString()} outstanding
             </div>
             {lease.first_open_payable_month && (
-              <div style={{ fontSize: 11, color: '#B91C1C', fontFamily: 'Montserrat, sans-serif' }}>
+              <div style={{ fontSize: 11, color: '#B91C1C', fontFamily: 'Montserrat, sans-serif', marginBottom: 8 }}>
                 Period: {lease.first_open_payable_month}{lease.last_open_payable_month && lease.last_open_payable_month !== lease.first_open_payable_month ? ` → ${lease.last_open_payable_month}` : ''}
               </div>
             )}
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+              {lease.first_open_payable_balance_link && (
+                <a href={lease.first_open_payable_balance_link} target="_blank" rel="noreferrer"
+                  style={{ padding: '6px 12px', borderRadius: 6, background: '#fff', border: '1px solid #FCA5A5', color: '#DC2626', fontSize: 11, fontWeight: 700, textDecoration: 'none', fontFamily: 'Montserrat, sans-serif' }}>
+                  First Balance ↗
+                </a>
+              )}
+              {lease.last_open_payable_balance_link && lease.last_open_payable_balance_link !== lease.first_open_payable_balance_link && (
+                <a href={lease.last_open_payable_balance_link} target="_blank" rel="noreferrer"
+                  style={{ padding: '6px 12px', borderRadius: 6, background: '#fff', border: '1px solid #FCA5A5', color: '#DC2626', fontSize: 11, fontWeight: 700, textDecoration: 'none', fontFamily: 'Montserrat, sans-serif' }}>
+                  Last Balance ↗
+                </a>
+              )}
+            </div>
           </div>
         )}
 
@@ -198,6 +215,20 @@ function SidePanel({ lease, checklist, onClose, onToggle, onUpdateLease, togglin
               {lease.escalated ? '🚨 Escalated' : '🚨 Escalate'}
             </button>
           </div>
+          {lease.escalated && (
+            <div style={{ marginTop: 10 }}>
+              <div style={{ fontSize: 10, color: '#94A3B8', fontWeight: 700, fontFamily: 'Montserrat, sans-serif', marginBottom: 6, letterSpacing: '0.05em' }}>SLACK ESCALATION THREAD</div>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <input value={escalationSlackLink} onChange={e => setEscalationSlackLink(e.target.value)} placeholder="Paste Slack thread link…"
+                  style={{ flex: 1, padding: '8px 12px', borderRadius: 8, border: '1.5px solid #FCA5A5', background: '#FFF5F5', color: '#1A3A5C', fontFamily: 'Montserrat, sans-serif', fontSize: 12, outline: 'none' }} />
+                {escalationSlackLink && <a href={escalationSlackLink} target="_blank" rel="noreferrer" style={{ padding: '8px 12px', borderRadius: 8, background: '#FEF2F2', color: '#DC2626', fontWeight: 700, fontSize: 12, textDecoration: 'none', whiteSpace: 'nowrap' as const }}>Open ↗</a>}
+              </div>
+              <button onClick={saveSlack} disabled={savingSlack}
+                style={{ marginTop: 6, padding: '7px 14px', borderRadius: 7, background: '#DC2626', color: '#fff', border: 'none', fontFamily: 'Montserrat, sans-serif', fontSize: 12, fontWeight: 700, cursor: savingSlack ? 'wait' : 'pointer', opacity: savingSlack ? 0.7 : 1 }}>
+                {savingSlack ? 'Saving…' : 'Save Slack Link'}
+              </button>
+            </div>
+          )}
         </div>
 
         {/* Intercom Link */}
@@ -244,8 +275,8 @@ export default function Dashboard() {
   const [search, setSearch] = useState('')
   const [filterConcierges, setFilterConcierges] = useState<string[]>([])
   const [filterStatus, setFilterStatus] = useState<ComputedStatus | ''>('')
-  const [filterPayouts, setFilterPayouts] = useState<string[]>([])
-  const [filterLeaseTypes, setFilterLeaseTypes] = useState<string[]>([])
+  const [filterPayouts, setFilterPayouts] = useState<string[]>(['Monthly'])
+  const [filterLeaseTypes, setFilterLeaseTypes] = useState<string[]>(['New'])
   const [filterAgreement, setFilterAgreement] = useState('active')
   const [showPaid, setShowPaid] = useState(false)
   const [showEscalated, setShowEscalated] = useState(false)
@@ -385,6 +416,7 @@ export default function Dashboard() {
     { key: 'address', label: 'Address', frozen: true },
     { key: 'concierge', label: 'Concierge', frozen: true },
     { key: 'homeowner_name', label: 'Homeowner' },
+    { key: 'checklist', label: 'Setup' },
     { key: 'lease_start_on', label: 'Lease Start' },
     { key: 'rent_amount', label: 'Rent' },
     { key: 'payout_plan', label: 'Payout Plan' },
@@ -392,7 +424,6 @@ export default function Dashboard() {
     { key: 'open_payable_balance', label: 'Open Balance' },
     { key: 'failed_months', label: 'Failed Months' },
     { key: 'status', label: 'Status' },
-    { key: 'checklist', label: 'Setup' },
   ]
 
   const stats = {
@@ -531,7 +562,7 @@ export default function Dashboard() {
                       {!hiddenCols.has('address') && (
                         <td style={{ padding: '11px 14px', position: 'sticky', left: 0, background: rowBg, zIndex: 1, maxWidth: 220, minWidth: 180 }}>
                           <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                            {lease.escalated && <span style={{ fontSize: 12 }}>🚨</span>}
+                            {lease.escalated && (lease.escalation_slack_link ? <a href={lease.escalation_slack_link} target="_blank" rel="noreferrer" onClick={e => e.stopPropagation()} style={{ fontSize: 12, textDecoration: 'none' }}>🚨</a> : <span style={{ fontSize: 12 }}>🚨</span>)}
                             <a href={`https://foundation.bln.hm/homes/${lease.home_id}`} target="_blank" rel="noreferrer" onClick={e => e.stopPropagation()}
                               style={{ color: '#2C4F6B', fontWeight: 600, fontSize: 12, textDecoration: 'underline', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'block', maxWidth: 200 }}>{lease.address}</a>
                           </div>
