@@ -13,7 +13,6 @@ export type Lease = {
   homeowner_name: string
   homeowner_id: string | null
   homeowner_link: string | null
-  intercom_link: string | null
   lease_type: string
   payout_plan: string
   rent_amount: number
@@ -22,6 +21,10 @@ export type Lease = {
   open_payable_balance: number
   first_open_payable_month: string
   last_open_payable_month: string
+  first_open_payable_balance_id: string | null
+  first_open_payable_balance_link: string | null
+  last_open_payable_balance_id: string | null
+  last_open_payable_balance_link: string | null
   lease_start_on: string
   lease_end_on: string
   terminated_on: string
@@ -30,7 +33,9 @@ export type Lease = {
   agreement_status: string
   manual_status: string | null
   notes: string | null
+  intercom_link: string | null
   escalated: boolean
+  escalation_slack_link: string | null
   updated_at: string
 }
 
