@@ -8,56 +8,22 @@ export default function AuthConfirm() {
   const [status, setStatus] = useState('Signing you in…')
 
   useEffect(() => {
-    const check = async () => {
-      // Wait a moment for Supabase to process the hash
-      await new Promise(r => setTimeout(r, 1000))
-      
-      const { data: { session }, error } = await supabase.auth.getSession()
-      
-      if (error) {
-        setStatus('Authentication error. Redirecting…')
-        setTimeout(() => window.location.replace('/login?error=auth'), 1500)
-        return
-      }
-
-      if (session?.user) {
+    // Supabase automatically processes the hash and fires onAuthStateChange
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+      if (event === 'SIGNED_IN' && session?.user) {
+        subscription.unsubscribe()
         const email = session.user.email || ''
         if (ALLOWED_DOMAINS.some(d => email.endsWith(`@${d}`))) {
-          setStatus('Welcome! Redirecting to dashboard…')
-          // Small delay to ensure cookies are written before redirect
-          await new Promise(r => setTimeout(r, 1500))
-          window.location.replace('/')
+          setStatus('Welcome! Loading dashboard…')
+          window.location.href = '/'
         } else {
           await supabase.auth.signOut()
-          window.location.replace('/login?error=domain')
+          window.location.href = '/login?error=domain'
         }
-        return
       }
+    })
 
-      // No session yet — try listening for it
-      setStatus('Verifying credentials…')
-      const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
-        if (event === 'SIGNED_IN' && session?.user) {
-          subscription.unsubscribe()
-          const email = session.user.email || ''
-          if (ALLOWED_DOMAINS.some(d => email.endsWith(`@${d}`))) {
-            window.location.replace('/')
-          } else {
-            supabase.auth.signOut().then(() => {
-              window.location.replace('/login?error=domain')
-            })
-          }
-        }
-      })
-
-      // Final fallback after 8 seconds
-      setTimeout(() => {
-        subscription.unsubscribe()
-        window.location.replace('/login?error=auth')
-      }, 8000)
-    }
-
-    check()
+    return () => subscription.unsubscribe()
   }, [])
 
   return (
