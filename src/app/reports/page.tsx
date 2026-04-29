@@ -27,6 +27,15 @@ function fmtMoney(n: number) {
   return `$${n.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`
 }
 
+function buildTrackerUrl(params: Record<string, string | string[]>) {
+  const p = new URLSearchParams()
+  Object.entries(params).forEach(([k, v]) => {
+    if (Array.isArray(v)) v.forEach(val => p.append(k, val))
+    else if (v) p.set(k, v)
+  })
+  return `/?${p.toString()}`
+}
+
 // ── Sub-components ─────────────────────────────────────────────────────────
 function StatusCard({ status, count, total, selected, onClick }: { status: ComputedStatus; count: number; total: number; selected: boolean; onClick: () => void }) {
   const cfg = STATUS_CONFIG[status]
@@ -77,7 +86,7 @@ function MultiSelectFilter({ label, options, selected, onChange }: { label: stri
 }
 
 // Simple bar chart
-function BarChart({ data, color = '#2C4F6B', valueFormatter = (v: number) => String(v) }: { data: { label: string; value: number }[]; color?: string; valueFormatter?: (v: number) => string }) {
+function BarChart({ data, color = '#2C4F6B', valueFormatter = (v: number, c?: number) => String(v) }: { data: { label: string; value: number; count?: number }[]; color?: string; valueFormatter?: (v: number, count?: number) => string }) {
   const max = Math.max(...data.map(d => d.value), 1)
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
@@ -87,7 +96,7 @@ function BarChart({ data, color = '#2C4F6B', valueFormatter = (v: number) => Str
           <div style={{ flex: 1, height: 20, background: '#F0F4F8', borderRadius: 4, overflow: 'hidden' }}>
             <div style={{ width: `${(d.value / max) * 100}%`, height: '100%', background: color, borderRadius: 4, transition: 'width 0.5s ease' }} />
           </div>
-          <span style={{ fontSize: 11, fontWeight: 700, color: '#1A3A5C', fontFamily: 'Montserrat, sans-serif', width: 70, flexShrink: 0 }}>{valueFormatter(d.value)}</span>
+          <span style={{ fontSize: 11, fontWeight: 700, color: '#1A3A5C', fontFamily: 'Montserrat, sans-serif', width: 100, flexShrink: 0 }}>{valueFormatter(d.value, d.count)}</span>
         </div>
       ))}
     </div>
@@ -95,13 +104,13 @@ function BarChart({ data, color = '#2C4F6B', valueFormatter = (v: number) => Str
 }
 
 // Inline lease list (for drilldown)
-function LeaseList({ leases, checklist, title, onClose }: { leases: Lease[]; checklist: ChecklistMap; title: string; onClose: () => void }) {
+function LeaseList({ leases, checklist, title, onClose, trackerUrl }: { leases: Lease[]; checklist: ChecklistMap; title: string; onClose: () => void; trackerUrl?: string }) {
   return (
     <div style={{ marginTop: 16, background: '#F8FAFC', borderRadius: 10, border: '1px solid #E2E8F0', overflow: 'hidden' }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 16px', borderBottom: '1px solid #E2E8F0', background: '#fff' }}>
         <span style={{ fontSize: 13, fontWeight: 700, color: '#1A3A5C', fontFamily: 'Montserrat, sans-serif' }}>{title} — {leases.length} leases</span>
         <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
-          <a href="/" target="_blank" style={{ fontSize: 11, color: '#2C4F6B', fontWeight: 700, fontFamily: 'Montserrat, sans-serif', textDecoration: 'underline' }}>Open Tracker ↗</a>
+          <a href={trackerUrl || '/'} target="_blank" style={{ fontSize: 11, color: '#2C4F6B', fontWeight: 700, fontFamily: 'Montserrat, sans-serif', textDecoration: 'underline' }}>Open in Tracker ↗</a>
           <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 16, color: '#94A3B8' }}>✕</button>
         </div>
       </div>
@@ -109,7 +118,7 @@ function LeaseList({ leases, checklist, title, onClose }: { leases: Lease[]; che
         <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12, fontFamily: 'Montserrat, sans-serif' }}>
           <thead>
             <tr style={{ background: '#F8FAFC', borderBottom: '1px solid #E2E8F0' }}>
-              {['Address', 'Homeowner', 'Concierge', 'Lease Start', 'Rent', 'Status', 'Setup'].map(h => (
+              {['Address', 'Homeowner', 'Concierge', 'Lease Start', 'Rent', 'Status', 'Setup', 'Notes'].map(h => (
                 <th key={h} style={{ padding: '8px 12px', textAlign: 'left', fontSize: 10, fontWeight: 700, color: '#94A3B8', letterSpacing: '0.05em' }}>{h.toUpperCase()}</th>
               ))}
             </tr>
@@ -134,6 +143,7 @@ function LeaseList({ leases, checklist, title, onClose }: { leases: Lease[]; che
                   <td style={{ padding: '8px 12px', color: '#1A3A5C', fontWeight: 600 }}>${l.rent_amount?.toLocaleString()}</td>
                   <td style={{ padding: '8px 12px' }}><span style={{ padding: '2px 8px', borderRadius: 999, fontSize: 10, fontWeight: 700, color: cfg.color, background: cfg.bg }}>{cfg.label}</span></td>
                   <td style={{ padding: '8px 12px', color: done === 5 ? '#0A6B4A' : '#F59E0B', fontWeight: 700 }}>{done}/5</td>
+                  <td style={{ padding: '8px 12px', color: '#64748B', maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const }}>{l.notes || <span style={{ color: '#CBD5E1', fontStyle: 'italic' }}>No notes</span>}</td>
                 </tr>
               )
             })}
@@ -151,6 +161,8 @@ export default function ReportsPage() {
   const [loading, setLoading] = useState(true)
   const [selectedStatus, setSelectedStatus] = useState<ComputedStatus | null>(null)
   const [selectedChecklist, setSelectedChecklist] = useState<string | null>(null)
+  const [conciergeSetupExpanded, setConciergeSetupExpanded] = useState(false)
+  const [conciergedrilldown, setConciergeDrilldown] = useState<{ leases: Lease[]; title: string } | null>(null)
   const [filters, setFilters] = useState<FilterState>({ concierges: [], payoutPlans: ['Monthly'], leaseTypes: ['New'], agreementStatus: 'active', month: '', dateFrom: '', dateTo: '' })
 
   const loadData = useCallback(async () => {
@@ -226,8 +238,8 @@ export default function ReportsPage() {
       key: item.key, label: item.label,
       count: unpaid.filter(l => !checklist[l.home_id]?.[item.key]).length
     }))
-    return { name, total: cls.length, paid, unpaid, noNotes, noIntercom, escalated, zeroSetup, missingByItem }
-  })
+    return { name, total: cls.length, paid, unpaid, noNotes, noIntercom, escalated, zeroSetup, missingByItem, paidPct: cls.length ? Math.round((paid.length / cls.length) * 100) : 0 }
+  }).sort((a, b) => b.paidPct - a.paidPct)
 
   // Totals row
   const totals = {
@@ -260,9 +272,10 @@ export default function ReportsPage() {
     }).length
   })).filter(d => d.value > 0)
 
-  const balanceByMonth = MONTHS.map(mon => ({
-    label: mon, value: leases.filter(l => l.first_open_payable_month?.startsWith(mon)).reduce((sum, l) => sum + (l.open_payable_balance || 0), 0)
-  })).filter(d => d.value > 0)
+  const balanceByMonth = MONTHS.map(mon => {
+    const monthLeases = leases.filter(l => l.first_open_payable_month?.startsWith(mon))
+    return { label: mon, value: monthLeases.reduce((sum, l) => sum + (l.open_payable_balance || 0), 0), count: monthLeases.length }
+  }).filter(d => d.value > 0)
 
   const setupByConcierge = conciergeNames.map(name => {
     const cls = filtered.filter(l => l.concierge === name)
@@ -271,8 +284,8 @@ export default function ReportsPage() {
     return { label: name.split(' ')[0], value: totalItems ? Math.round((doneItems / totalItems) * 100) : 0 }
   }).sort((a, b) => b.value - a.value).slice(0, 10)
 
-  const rentByType = Array.from(new Set(filtered.map(l => l.lease_type))).map(type => ({
-    label: type, value: filtered.filter(l => l.lease_type === type && getStatus(l) !== 'paid').reduce((sum, l) => sum + (l.rent_amount || 0), 0)
+  const rentByType = Array.from(new Set(leases.map(l => l.lease_type))).map(type => ({
+    label: type, value: leases.filter(l => l.lease_type === type && getStatus(l) !== 'paid').reduce((sum, l) => sum + (l.rent_amount || 0), 0)
   })).filter(d => d.value > 0).sort((a, b) => b.value - a.value)
 
   if (loading) return (
@@ -346,18 +359,39 @@ export default function ReportsPage() {
             ))}
           </div>
           {selectedStatus && statusCounts[selectedStatus].length > 0 && (
-            <LeaseList leases={statusCounts[selectedStatus]} checklist={checklist} title={STATUS_CONFIG[selectedStatus].label} onClose={() => setSelectedStatus(null)} />
+            <LeaseList
+              leases={statusCounts[selectedStatus]}
+              checklist={checklist}
+              title={STATUS_CONFIG[selectedStatus].label}
+              onClose={() => setSelectedStatus(null)}
+              trackerUrl={buildTrackerUrl({
+                status: selectedStatus,
+                payoutPlan: filters.payoutPlans,
+                leaseType: filters.leaseTypes,
+                concierge: filters.concierges,
+                agreement: filters.agreementStatus,
+                month: filters.month,
+                dateFrom: filters.dateFrom,
+                dateTo: filters.dateTo,
+              })}
+            />
           )}
         </SectionCard>
 
         {/* Section 2 — Concierge Performance */}
         <SectionCard title="👥 Concierge Performance">
+          <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 12 }}>
+            <button onClick={() => setConciergeSetupExpanded(!conciergeSetupExpanded)}
+              style={{ padding: '6px 14px', borderRadius: 7, border: '1.5px solid #E2E8F0', background: '#F8FAFC', color: '#2C4F6B', cursor: 'pointer', fontSize: 11, fontWeight: 700, fontFamily: 'Montserrat, sans-serif' }}>
+              {conciergeSetupExpanded ? '▲ Hide Setup Detail' : '▼ Show Setup Detail'}
+            </button>
+          </div>
           <div style={{ overflowX: 'auto' }}>
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12, fontFamily: 'Montserrat, sans-serif' }}>
               <thead>
                 <tr style={{ background: '#F8FAFC', borderBottom: '2px solid #E2E8F0' }}>
                   {['Concierge', 'Total', 'Paid', 'Unpaid', 'No Notes', 'No Intercom', 'Escalated', '0/5 Setup',
-                    ...CHECKLIST_ITEMS.map(i => `No ${i.label}`)].map(h => (
+                    ...(conciergeSetupExpanded ? CHECKLIST_ITEMS.map(i => `No ${i.label}`) : [])].map(h => (
                     <th key={h} style={{ padding: '10px 12px', textAlign: 'left', fontSize: 10, fontWeight: 700, color: '#94A3B8', letterSpacing: '0.05em', whiteSpace: 'nowrap' as const }}>{h.toUpperCase()}</th>
                   ))}
                 </tr>
@@ -365,16 +399,40 @@ export default function ReportsPage() {
               <tbody>
                 {conciergeRows.map((row, i) => (
                   <tr key={row.name} style={{ borderBottom: '1px solid #F0F4F8', background: i % 2 === 0 ? '#fff' : '#FAFBFC' }}>
-                    <td style={{ padding: '10px 12px', fontWeight: 700, color: '#1A3A5C', whiteSpace: 'nowrap' as const }}>{row.name}</td>
-                    <td style={{ padding: '10px 12px', color: '#64748B' }}>{row.total}</td>
-                    <td style={{ padding: '10px 12px', color: '#0A6B4A', fontWeight: 600 }}>{fmt(row.paid.length, row.total)}</td>
-                    <td style={{ padding: '10px 12px', color: row.unpaid.length > 0 ? '#DC2626' : '#64748B', fontWeight: 600 }}>{fmt(row.unpaid.length, row.total)}</td>
-                    <td style={{ padding: '10px 12px', color: row.noNotes.length > 0 ? '#F59E0B' : '#64748B' }}>{fmt(row.noNotes.length, row.unpaid.length)}</td>
-                    <td style={{ padding: '10px 12px', color: row.noIntercom.length > 0 ? '#F59E0B' : '#64748B' }}>{fmt(row.noIntercom.length, row.unpaid.length)}</td>
-                    <td style={{ padding: '10px 12px', color: row.escalated.length > 0 ? '#DC2626' : '#64748B' }}>{fmt(row.escalated.length, row.unpaid.length)}</td>
-                    <td style={{ padding: '10px 12px', color: row.zeroSetup.length > 0 ? '#DC2626' : '#64748B' }}>{fmt(row.zeroSetup.length, row.unpaid.length)}</td>
-                    {row.missingByItem.map(m => (
-                      <td key={m.key} style={{ padding: '10px 12px', color: m.count > 0 ? '#F59E0B' : '#64748B' }}>{fmt(m.count, row.unpaid.length)}</td>
+                    <td style={{ padding: '10px 12px', whiteSpace: 'nowrap' as const, minWidth: 160 }}>
+                      <div style={{ fontWeight: 700, color: '#1A3A5C', marginBottom: 4 }}>{row.name}</div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                        <div style={{ flex: 1, height: 4, background: '#E2E8F0', borderRadius: 2, overflow: 'hidden' }}>
+                          <div style={{ width: `${row.paidPct}%`, height: '100%', background: row.paidPct === 100 ? '#2DD4A0' : row.paidPct > 50 ? '#F59E0B' : '#DC2626', borderRadius: 2, transition: 'width 0.5s' }} />
+                        </div>
+                        <span style={{ fontSize: 10, color: '#94A3B8', fontWeight: 600, width: 30 }}>{row.paidPct}%</span>
+                      </div>
+                    </td>
+                    <td style={{ padding: '10px 12px', color: '#64748B' }}>
+                      <button onClick={() => setConciergeDrilldown({ leases: filtered.filter(l => l.concierge === row.name), title: row.name + ' — All' })} style={drillBtn}>{row.total}</button>
+                    </td>
+                    <td style={{ padding: '10px 12px' }}>
+                      <button onClick={() => setConciergeDrilldown({ leases: row.paid, title: row.name + ' — Paid' })} style={{ ...drillBtn, color: '#0A6B4A', fontWeight: 700 }}>{fmt(row.paid.length, row.total)}</button>
+                    </td>
+                    <td style={{ padding: '10px 12px' }}>
+                      <button onClick={() => setConciergeDrilldown({ leases: row.unpaid, title: row.name + ' — Unpaid' })} style={{ ...drillBtn, color: row.unpaid.length > 0 ? '#DC2626' : '#64748B', fontWeight: 700 }}>{fmt(row.unpaid.length, row.total)}</button>
+                    </td>
+                    <td style={{ padding: '10px 12px' }}>
+                      <button onClick={() => setConciergeDrilldown({ leases: row.noNotes, title: row.name + ' — No Notes' })} style={{ ...drillBtn, color: row.noNotes.length > 0 ? '#F59E0B' : '#64748B' }}>{fmt(row.noNotes.length, row.unpaid.length)}</button>
+                    </td>
+                    <td style={{ padding: '10px 12px' }}>
+                      <button onClick={() => setConciergeDrilldown({ leases: row.noIntercom, title: row.name + ' — No Intercom' })} style={{ ...drillBtn, color: row.noIntercom.length > 0 ? '#F59E0B' : '#64748B' }}>{fmt(row.noIntercom.length, row.unpaid.length)}</button>
+                    </td>
+                    <td style={{ padding: '10px 12px' }}>
+                      <button onClick={() => setConciergeDrilldown({ leases: row.escalated, title: row.name + ' — Escalated' })} style={{ ...drillBtn, color: row.escalated.length > 0 ? '#DC2626' : '#64748B' }}>{fmt(row.escalated.length, row.unpaid.length)}</button>
+                    </td>
+                    <td style={{ padding: '10px 12px' }}>
+                      <button onClick={() => setConciergeDrilldown({ leases: row.zeroSetup, title: row.name + ' — 0/5 Setup' })} style={{ ...drillBtn, color: row.zeroSetup.length > 0 ? '#DC2626' : '#64748B' }}>{fmt(row.zeroSetup.length, row.unpaid.length)}</button>
+                    </td>
+                    {conciergeSetupExpanded && row.missingByItem.map(m => (
+                      <td key={m.key} style={{ padding: '10px 12px' }}>
+                        <button onClick={() => setConciergeDrilldown({ leases: row.unpaid.filter(l => !checklist[l.home_id]?.[m.key]), title: `${row.name} — Missing ${m.label}` })} style={{ ...drillBtn, color: m.count > 0 ? '#F59E0B' : '#64748B' }}>{fmt(m.count, row.unpaid.length)}</button>
+                      </td>
                     ))}
                   </tr>
                 ))}
@@ -388,13 +446,16 @@ export default function ReportsPage() {
                   <td style={{ padding: '10px 12px', color: '#F59E0B' }}>{fmt(totals.noIntercom, totals.unpaid)}</td>
                   <td style={{ padding: '10px 12px', color: '#DC2626' }}>{fmt(totals.escalated, totals.unpaid)}</td>
                   <td style={{ padding: '10px 12px', color: '#DC2626' }}>{fmt(totals.zeroSetup, totals.unpaid)}</td>
-                  {totals.missingByItem.map(m => (
+                  {conciergeSetupExpanded && totals.missingByItem.map(m => (
                     <td key={m.key} style={{ padding: '10px 12px', color: '#F59E0B' }}>{fmt(m.count, totals.unpaid)}</td>
                   ))}
                 </tr>
               </tbody>
             </table>
           </div>
+          {conciergedrilldown && (
+            <LeaseList leases={conciergedrilldown.leases} checklist={checklist} title={conciergedrilldown.title} onClose={() => setConciergeDrilldown(null)} />
+          )}
         </SectionCard>
 
         {/* Section 3 — Checklist Breakdown */}
@@ -404,7 +465,7 @@ export default function ReportsPage() {
               <button key={item.key} onClick={() => setSelectedChecklist(selectedChecklist === item.key ? null : item.key)}
                 style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', padding: '14px 18px', borderRadius: 10, background: selectedChecklist === item.key ? '#FEF2F2' : '#fff', border: `1.5px solid ${selectedChecklist === item.key ? '#FCA5A5' : '#E2E8F0'}`, cursor: 'pointer', transition: 'all 0.2s', minWidth: 140 }}>
                 <span style={{ fontSize: 18, marginBottom: 4 }}>{item.icon}</span>
-                <span style={{ fontSize: 13, fontWeight: 700, color: '#1A3A5C' }}>{item.label}</span>
+                <span style={{ fontSize: 13, fontWeight: 700, color: '#1A3A5C', fontFamily: 'Montserrat, sans-serif' }}>{item.label}</span>
                 <span style={{ fontSize: 20, fontWeight: 700, color: '#DC2626', marginTop: 4 }}>{item.missing.length}</span>
                 <span style={{ fontSize: 10, color: '#94A3B8', marginTop: 2 }}>missing · {pct(item.missing.length, filtered.length)} of leases</span>
                 <span style={{ fontSize: 10, color: '#0A6B4A', marginTop: 2 }}>{item.complete.length} complete</span>
@@ -427,7 +488,7 @@ export default function ReportsPage() {
             <BarChart data={leasesByMonth} color="#2C4F6B" />
           </SectionCard>
           <SectionCard title="💸 Open Balance by Month">
-            <BarChart data={balanceByMonth} color="#DC2626" valueFormatter={fmtMoney} />
+            <BarChart data={balanceByMonth} color="#DC2626" valueFormatter={(v, c) => `${fmtMoney(v)}${c ? ` (${c})` : ''}`} />
           </SectionCard>
           <SectionCard title="✅ Setup Completion by Concierge (%)">
             <BarChart data={setupByConcierge} color="#2DD4A0" valueFormatter={v => `${v}%`} />
@@ -446,4 +507,10 @@ export default function ReportsPage() {
 const selStyle: React.CSSProperties = {
   padding: '8px 12px', borderRadius: 7, border: '1.5px solid #E2E8F0', background: '#F8FAFC',
   color: '#1A3A5C', fontFamily: 'Montserrat, sans-serif', fontSize: 12, outline: 'none', cursor: 'pointer',
+}
+
+const drillBtn: React.CSSProperties = {
+  background: 'none', border: 'none', cursor: 'pointer', padding: '2px 6px', borderRadius: 4,
+  fontSize: 12, fontFamily: 'Montserrat, sans-serif', textDecoration: 'underline', textDecorationStyle: 'dotted',
+  textUnderlineOffset: '2px',
 }
