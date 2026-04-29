@@ -312,14 +312,14 @@ export default function Dashboard() {
   }, [])
 
   useEffect(() => {
-    supabase.auth.getUser().then(({ data }) => {
-      if (!data.user) {
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (!session) {
         window.location.replace('/login')
         return
       }
-      setUser(data.user)
+      setUser(session.user)
+      loadData()
     })
-    loadData()
     const ch = supabase.channel('live-updates')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'leases' }, (p) => {
         flashLive()
