@@ -1,5 +1,6 @@
 'use client'
-import { useEffect, useState, useCallback, useRef } from 'react'
+import { useEffect, useState, useCallback, useRef, Suspense } from 'react'
+import { useSearchParams } from 'next/navigation'
 import { supabase, CHECKLIST_ITEMS, computeStatus, STATUS_CONFIG, type Lease, type ChecklistMap, type ComputedStatus } from '@/lib/supabase'
 import type { User } from '@supabase/supabase-js'
 
@@ -261,7 +262,7 @@ function SidePanel({ lease, checklist, onClose, onToggle, onUpdateLease, togglin
   )
 }
 
-export default function Dashboard() {
+function DashboardInner() {
   const [leases, setLeases] = useState<Lease[]>([])
   const [checklist, setChecklist] = useState<ChecklistMap>({})
   const [loading, setLoading] = useState(true)
@@ -275,15 +276,16 @@ export default function Dashboard() {
 
   // Filters
   const [search, setSearch] = useState('')
-  const [filterConcierges, setFilterConcierges] = useState<string[]>([])
-  const [filterStatus, setFilterStatus] = useState<ComputedStatus | ''>('')
-  const [filterPayouts, setFilterPayouts] = useState<string[]>(['Monthly'])
-  const [filterLeaseTypes, setFilterLeaseTypes] = useState<string[]>(['New'])
-  const [filterAgreement, setFilterAgreement] = useState('active')
+  const searchParams = useSearchParams()
+  const [filterConcierges, setFilterConcierges] = useState<string[]>(searchParams.getAll('concierge') || [])
+  const [filterStatus, setFilterStatus] = useState<ComputedStatus | ''>(searchParams.get('status') as ComputedStatus || '')
+  const [filterPayouts, setFilterPayouts] = useState<string[]>(searchParams.getAll('payoutPlan').length ? searchParams.getAll('payoutPlan') : ['Monthly'])
+  const [filterLeaseTypes, setFilterLeaseTypes] = useState<string[]>(searchParams.getAll('leaseType').length ? searchParams.getAll('leaseType') : ['New'])
+  const [filterAgreement, setFilterAgreement] = useState(searchParams.get('agreement') || 'active')
   const [showPaid, setShowPaid] = useState(false)
   const [showEscalated, setShowEscalated] = useState(false)
-  const [filterMonth, setFilterMonth] = useState('')
-  const [filterRange, setFilterRange] = useState({ from: '', to: '' })
+  const [filterMonth, setFilterMonth] = useState(searchParams.get('month') || '')
+  const [filterRange, setFilterRange] = useState({ from: searchParams.get('dateFrom') || '', to: searchParams.get('dateTo') || '' })
   const [hiddenCols, setHiddenCols] = useState<Set<string>>(new Set())
   const [sortCol, setSortCol] = useState('lease_start_on')
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc')
@@ -631,4 +633,12 @@ export default function Dashboard() {
 const selectStyle: React.CSSProperties = {
   padding: '8px 12px', borderRadius: 7, border: '1.5px solid #E2E8F0', background: '#F8FAFC',
   color: '#1A3A5C', fontFamily: 'Montserrat, sans-serif', fontSize: 12, outline: 'none', cursor: 'pointer',
+}
+
+export default function Dashboard() {
+  return (
+    <Suspense fallback={<div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh' }}><div style={{ width: 28, height: 28, border: '3px solid #E2E8F0', borderTop: '3px solid #2DD4A0', borderRadius: '50%', animation: 'spin 0.7s linear infinite' }} /></div>}>
+      <DashboardInner />
+    </Suspense>
+  )
 }
