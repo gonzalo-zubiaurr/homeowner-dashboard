@@ -55,7 +55,6 @@ export async function POST(req: NextRequest) {
         first_open_payable_balance_link: get(row, 'FirstOpenPayableBalanceLink') || null,
         last_open_payable_balance_id: get(row, 'LastOpenPayableBalanceId') || null,
         last_open_payable_balance_link: get(row, 'LastOpenPayableBalanceLink') || null,
-        last_open_payable_month: get(row, 'LastOpenPayableMonth') || null,
         lease_start_on: parseDate(get(row, 'LeaseStartOn')), lease_end_on: parseDate(get(row, 'LeaseEndOn')),
         terminated_on: parseDate(get(row, 'TerminatedOn')), notice_type: get(row, 'NoticeType') || null,
         lease_status: get(row, 'Status'), agreement_status: get(row, 'AgreementStatus'),
