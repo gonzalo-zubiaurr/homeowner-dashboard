@@ -24,7 +24,8 @@ export default function AuthConfirm() {
         const email = session.user.email || ''
         if (ALLOWED_DOMAINS.some(d => email.endsWith(`@${d}`))) {
           setStatus('Welcome! Redirecting to dashboard…')
-          // Force a hard navigation to ensure cookies are set
+          // Small delay to ensure cookies are written before redirect
+          await new Promise(r => setTimeout(r, 1500))
           window.location.replace('/')
         } else {
           await supabase.auth.signOut()
