@@ -28,7 +28,7 @@ export async function POST(req: NextRequest) {
       if (row.length > 3) rows.push(row)
     }
 
-    const homes = Array.from(new Set(rows.map(r => get(r, 'HomeId')).filter(Boolean))).map(id => {
+    const homes = [...new Set(rows.map(r => get(r, 'HomeId')).filter(Boolean))].map(id => {
       const r = rows.find(r => get(r, 'HomeId') === id)!
       return { home_id: id, home_link: get(r, 'HomeLink') }
     })
@@ -44,7 +44,7 @@ export async function POST(req: NextRequest) {
       return {
         lease_id: id, lease_link: get(row, 'LeaseLink'), home_id: get(row, 'HomeId'),
         address: get(row, 'Address').replace(/^"|"$/g, ''), concierge: get(row, 'Concierge'),
-        homeowner_name: get(row, 'HomeownerName'), lease_type: get(row, 'LeaseType'),
+        homeowner_name: get(row, 'HomeownerName'), homeowner_id: get(row, 'HomeownerId') || null, homeowner_link: get(row, 'HomeownerLink') || null, lease_type: get(row, 'LeaseType'),
         payout_plan: get(row, 'PayoutPlan'), rent_amount: parseFloat(get(row, 'RentAmount')) || 0,
         rent_payout_status: get(row, 'RentPayoutStatus'),
         open_payable_count: parseInt(get(row, 'OpenPayableCount')) || 0,
