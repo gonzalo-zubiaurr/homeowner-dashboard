@@ -28,7 +28,7 @@ export async function POST(req: NextRequest) {
       if (row.length > 3) rows.push(row)
     }
 
-    const homes = Array.from(new Set(rows.map(r => get(r, 'HomeId')).filter(Boolean))).map(id => {
+    const homes = [...new Set(rows.map(r => get(r, 'HomeId')).filter(Boolean))].map(id => {
       const r = rows.find(r => get(r, 'HomeId') === id)!
       return { home_id: id, home_link: get(r, 'HomeLink') }
     })
@@ -50,6 +50,11 @@ export async function POST(req: NextRequest) {
         open_payable_count: parseInt(get(row, 'OpenPayableCount')) || 0,
         open_payable_balance: parseFloat(get(row, 'OpenPayableBalance')) || 0,
         first_open_payable_month: get(row, 'FirstOpenPayableMonth') || null,
+        last_open_payable_month: get(row, 'LastOpenPayableMonth') || null,
+        first_open_payable_balance_id: get(row, 'FirstOpenPayableBalanceId') || null,
+        first_open_payable_balance_link: get(row, 'FirstOpenPayableBalanceLink') || null,
+        last_open_payable_balance_id: get(row, 'LastOpenPayableBalanceId') || null,
+        last_open_payable_balance_link: get(row, 'LastOpenPayableBalanceLink') || null,
         last_open_payable_month: get(row, 'LastOpenPayableMonth') || null,
         lease_start_on: parseDate(get(row, 'LeaseStartOn')), lease_end_on: parseDate(get(row, 'LeaseEndOn')),
         terminated_on: parseDate(get(row, 'TerminatedOn')), notice_type: get(row, 'NoticeType') || null,
