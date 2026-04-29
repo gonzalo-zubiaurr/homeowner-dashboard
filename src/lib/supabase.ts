@@ -13,6 +13,7 @@ export type Lease = {
   homeowner_name: string
   homeowner_id: string | null
   homeowner_link: string | null
+  intercom_link: string | null
   lease_type: string
   payout_plan: string
   rent_amount: number
