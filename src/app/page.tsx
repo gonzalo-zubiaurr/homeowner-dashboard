@@ -249,7 +249,7 @@ export default function Dashboard() {
   const toggleCol = (col: string) => setHiddenCols(prev => { const s = new Set(prev); s.has(col) ? s.delete(col) : s.add(col); return s })
   const handleSort = (col: string) => { if (sortCol === col) setSortDir(d => d === 'asc' ? 'desc' : 'asc'); else { setSortCol(col); setSortDir('asc') } }
 
-  const allConcierges = [...new Set(leases.map(l => l.concierge).filter(Boolean))].sort()
+  const allConcierges = Array.from(new Set(leases.map(l => l.concierge).filter(Boolean))).sort()
 
   const filtered = leases.filter(l => {
     const done = CHECKLIST_ITEMS.filter(i => checklist[l.home_id]?.[i.key]).length
