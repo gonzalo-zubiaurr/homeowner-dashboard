@@ -272,7 +272,12 @@ export default function ReportsPage() {
     }).length
   })).filter(d => d.value > 0)
 
+  const today = new Date()
+  const currentMonthStr = today.toLocaleString('en-US', { month: 'short' }) + ' ' + today.getFullYear()
   const balanceByMonth = MONTHS.map(mon => {
+    const monDate = new Date(`${mon} 1 2026`)
+    // Exclude current and future months — they're open but not yet due
+    if (monDate >= new Date(today.getFullYear(), today.getMonth(), 1)) return { label: mon, value: 0, count: 0 }
     const monthLeases = leases.filter(l => l.first_open_payable_month?.startsWith(mon))
     return { label: mon, value: monthLeases.reduce((sum, l) => sum + (l.open_payable_balance || 0), 0), count: monthLeases.length }
   }).filter(d => d.value > 0)
@@ -487,7 +492,7 @@ export default function ReportsPage() {
           <SectionCard title="📅 Leases Starting by Month (2026)">
             <BarChart data={leasesByMonth} color="#2C4F6B" />
           </SectionCard>
-          <SectionCard title="💸 Open Balance by Month">
+          <SectionCard title="💸 Failed Payments by Month">
             <BarChart data={balanceByMonth} color="#DC2626" valueFormatter={(v, c) => `${fmtMoney(v)}${c ? ` (${c})` : ''}`} />
           </SectionCard>
           <SectionCard title="✅ Setup Completion by Concierge (%)">
