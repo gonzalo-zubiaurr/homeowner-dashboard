@@ -272,14 +272,12 @@ export default function ReportsPage() {
     }).length
   })).filter(d => d.value > 0)
 
-  const today = new Date()
   const balanceByMonth = MONTHS.map(mon => {
-    const monthLeases = leases.filter(l => {
-      if (!l.first_open_payable_month?.startsWith(mon)) return false
-      // Only include if lease has already started (payment should have been made)
-      const startDate = l.lease_start_on ? new Date(l.lease_start_on) : null
-      return startDate ? startDate < today : false
-    })
+    // Use filtered leases and only include genuinely failed payments
+    const monthLeases = filtered.filter(l =>
+      l.first_open_payable_month?.startsWith(mon) &&
+      l.rent_payout_status?.toLowerCase() === 'failed'
+    )
     return { label: mon, value: monthLeases.reduce((sum, l) => sum + (l.open_payable_balance || 0), 0), count: monthLeases.length }
   }).filter(d => d.value > 0)
 
