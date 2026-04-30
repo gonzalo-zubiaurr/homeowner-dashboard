@@ -273,12 +273,13 @@ export default function ReportsPage() {
   })).filter(d => d.value > 0)
 
   const today = new Date()
-  const currentMonthStr = today.toLocaleString('en-US', { month: 'short' }) + ' ' + today.getFullYear()
   const balanceByMonth = MONTHS.map(mon => {
-    const monDate = new Date(`${mon} 1 2026`)
-    // Exclude current and future months — they're open but not yet due
-    if (monDate >= new Date(today.getFullYear(), today.getMonth(), 1)) return { label: mon, value: 0, count: 0 }
-    const monthLeases = leases.filter(l => l.first_open_payable_month?.startsWith(mon))
+    const monthLeases = leases.filter(l => {
+      if (!l.first_open_payable_month?.startsWith(mon)) return false
+      // Only include if lease has already started (payment should have been made)
+      const startDate = l.lease_start_on ? new Date(l.lease_start_on) : null
+      return startDate ? startDate < today : false
+    })
     return { label: mon, value: monthLeases.reduce((sum, l) => sum + (l.open_payable_balance || 0), 0), count: monthLeases.length }
   }).filter(d => d.value > 0)
 
