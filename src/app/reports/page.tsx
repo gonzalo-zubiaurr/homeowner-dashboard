@@ -21,13 +21,13 @@ const MONTH_LABEL = today.toLocaleString('en-US', { month: 'long', year: 'numeri
 
 // ── Lease helpers ─────────────────────────────────────────────────────────────
 
-function isActive(l: Lease) { return l.lease_status === 'Active' }
-function isStarted(l: Lease) { return isActive(l) && !!l.lease_start_on && new Date(l.lease_start_on) <= today }
+function isActive(l: Lease) { return l.lease_status === 'Executed' }
+function isStarted(l: Lease) { return !!l.lease_start_on && new Date(l.lease_start_on) <= today }
 function isUpcoming(l: Lease) { return isActive(l) && !!l.lease_start_on && new Date(l.lease_start_on) > today }
 function isPaid(l: Lease) { return l.rent_payout_status?.toLowerCase() === 'paid' }
 function isGuaranteed(l: Lease) { return l.payout_plan === 'Monthly' }
 function startedSince(l: Lease, since: Date) {
-  if (!l.lease_start_on || !isActive(l)) return false
+  if (!l.lease_start_on) return false
   const d = new Date(l.lease_start_on)
   return d >= since && d <= today
 }
