@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 
-const supabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!)
+const supabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!)
 
 function parseDate(val: string): string | null {
   if (!val?.trim()) return null
@@ -53,6 +53,8 @@ export async function POST(req: NextRequest) {
         last_open_payable_month: get(row, 'LastOpenPayableMonth') || null,
         first_open_payable_balance_id: get(row, 'FirstOpenPayableBalanceId') || null,
         first_open_payable_balance_link: get(row, 'FirstOpenPayableBalanceLink') || null,
+        first_open_payable_booked_on: parseDate(get(row, 'FirstOpenPayableBookedOn')),
+        last_open_payable_booked_on: parseDate(get(row, 'LastOpenPayableBookedOn')),
         last_open_payable_balance_id: get(row, 'LastOpenPayableBalanceId') || null,
         last_open_payable_balance_link: get(row, 'LastOpenPayableBalanceLink') || null,
         lease_start_on: parseDate(get(row, 'LeaseStartOn')), lease_end_on: parseDate(get(row, 'LeaseEndOn')),
