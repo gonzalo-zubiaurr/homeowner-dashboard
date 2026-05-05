@@ -5,7 +5,7 @@ const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   auth: {
     detectSessionInUrl: true,
-    flowType: 'pkce',
+    flowType: 'implicit',
     persistSession: true,
   }
 })
@@ -31,6 +31,8 @@ export type Lease = {
   first_open_payable_balance_link: string | null
   last_open_payable_balance_id: string | null
   last_open_payable_balance_link: string | null
+  first_open_payable_booked_on: string | null
+  last_open_payable_booked_on: string | null
   lease_start_on: string
   lease_end_on: string
   terminated_on: string
@@ -42,7 +44,16 @@ export type Lease = {
   intercom_link: string | null
   escalated: boolean
   escalation_slack_link: string | null
+  last_note_at: string | null
   updated_at: string
+}
+
+export type LeaseNote = {
+  id: string
+  lease_id: string
+  note: string
+  author: string
+  created_at: string
 }
 
 export type ChecklistItem = {
@@ -64,30 +75,29 @@ export const CHECKLIST_ITEMS = [
   { key: 'id_verified',     label: 'ID Verified',            icon: '🪪' },
 ]
 
-export type ComputedStatus = 'failed' | 'ready_to_process' | 'processing' | 'ready_to_pay' | 'pending' | 'paid'
+export type ComputedStatus = 'paid' | 'processing' | 'ready_to_initiate' | 'rent_failed' | 'setup_complete_future' | 'pending_setup_future'
 
 export function computeStatus(lease: Lease, checklistDone: number): ComputedStatus {
   const allDone = checklistDone === CHECKLIST_ITEMS.length
   const csvPaid = lease.rent_payout_status?.toLowerCase() === 'paid'
-  const csvFailed = lease.rent_payout_status?.toLowerCase() === 'failed'
   const isProcessing = lease.manual_status === 'processing'
   const now = new Date()
   const startDate = lease.lease_start_on ? new Date(lease.lease_start_on) : null
-  const isPastDue = startDate ? startDate < now : false
+  const hasStarted = startDate ? startDate <= now : false
 
   if (csvPaid) return 'paid'
   if (isProcessing) return 'processing'
-  if (allDone && isPastDue) return 'ready_to_process'
-  if (allDone) return 'ready_to_pay'
-  if (csvFailed) return 'failed'
-  return 'pending'
+  if (allDone && hasStarted) return 'ready_to_initiate'
+  if (allDone && !hasStarted) return 'setup_complete_future'
+  if (!allDone && hasStarted) return 'rent_failed'
+  return 'pending_setup_future'
 }
 
-export const STATUS_CONFIG: Record<ComputedStatus, { label: string; color: string; bg: string; priority: number }> = {
-  failed:           { label: 'Failed',            color: '#DC2626', bg: '#FEF2F2', priority: 1 },
-  ready_to_process: { label: 'Ready to Process',  color: '#0891B2', bg: '#ECFEFF', priority: 2 },
-  processing:       { label: 'Processing',         color: '#22D3EE', bg: '#F0FDFF', priority: 3 },
-  ready_to_pay:     { label: 'Ready to Pay',       color: '#2DD4A0', bg: '#E8FBF5', priority: 4 },
-  pending:          { label: 'Pending',             color: '#F59E0B', bg: '#FFFBEB', priority: 5 },
-  paid:             { label: 'Paid',                color: '#2DD4A0', bg: '#E8FBF5', priority: 6 },
+export const STATUS_CONFIG: Record<ComputedStatus, { label: string; color: string; bg: string; priority: number; italic?: boolean; tooltip: string }> = {
+  paid:                 { label: 'Rent Paid',          color: '#0A6B4A', bg: '#E8FBF5', priority: 1, tooltip: 'Payment confirmed by system' },
+  processing:           { label: 'Processing',          color: '#06B6D4', bg: '#ECFEFF', priority: 2, tooltip: 'Team has initiated payment, awaiting confirmation' },
+  ready_to_initiate:    { label: 'Ready to Initiate',  color: '#2563EB', bg: '#EFF6FF', priority: 3, tooltip: 'Setup complete, rent is due — process now' },
+  rent_failed:          { label: 'Rent Failed',         color: '#DC2626', bg: '#FEF2F2', priority: 4, tooltip: 'Rent is overdue and setup is incomplete' },
+  setup_complete_future:{ label: 'Setup Complete',      color: '#2DD4A0', bg: '#E8FBF5', priority: 5, italic: true, tooltip: 'Setup done, rent not yet due — no action needed' },
+  pending_setup_future: { label: 'Pending Setup',       color: '#F59E0B', bg: '#FFFBEB', priority: 6, italic: true, tooltip: 'Rent not yet due but setup is incomplete' },
 }
