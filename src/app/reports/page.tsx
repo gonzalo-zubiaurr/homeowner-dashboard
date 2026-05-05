@@ -1,10 +1,8 @@
 'use client'
 import { useEffect, useState, useCallback } from 'react'
-import { supabase, computeStatus, STATUS_CONFIG, CHECKLIST_ITEMS, type Lease, type ChecklistMap } from '@/lib/supabase'
+import { supabase, CHECKLIST_ITEMS, type Lease, type ChecklistMap } from '@/lib/supabase'
 
-// ── Types ────────────────────────────────────────────────────────────────────
-
-type LeaseNote = { id: string; lease_id: string; note: string; author: string; created_at: string }
+// ── Types ─────────────────────────────────────────────────────────────────────
 
 type PanelLease = {
   address: string; homeowner_name: string; homeowner_link?: string | null
@@ -13,10 +11,19 @@ type PanelLease = {
   lease_id: string
 }
 
-// ── Helpers ──────────────────────────────────────────────────────────────────
+// ── Date helpers ──────────────────────────────────────────────────────────────
 
 const today = new Date()
 const startOfYear = new Date(today.getFullYear(), 0, 1)
+const startOfQuarter = new Date(today.getFullYear(), Math.floor(today.getMonth() / 3) * 3, 1)
+const startOfMonth = new Date(today.getFullYear(), today.getMonth(), 1)
+
+const QUARTER_NUM = Math.floor(today.getMonth() / 3) + 1
+const QUARTER_LABEL = `Q${QUARTER_NUM} ${today.getFullYear()}`
+const MONTH_LABEL = today.toLocaleString('en-US', { month: 'long', year: 'numeric' })
+const MONTH_NAME = today.toLocaleString('en-US', { month: 'long', year: 'numeric' })
+
+// ── Lease helpers ─────────────────────────────────────────────────────────────
 
 function isStarted(l: Lease) {
   if (!l.lease_start_on) return false
@@ -28,19 +35,13 @@ function isUpcoming(l: Lease) {
   return new Date(l.lease_start_on) > today
 }
 
-function isPaid(l: Lease) { return l.rent_payout_status === 'Paid' }
+function isPaid(l: Lease) { return l.rent_payout_status?.toLowerCase() === 'paid' }
 function isGuaranteed(l: Lease) { return l.payout_plan === 'Monthly' }
-function isFailed(l: Lease) { return isStarted(l) && !isPaid(l) }
 
-function isCurrentMonthBooked(l: Lease) {
-  const checkDate = (d: string | null | undefined) => {
-    if (!d) return false
-    const date = new Date(d)
-    return date.getMonth() === today.getMonth() && date.getFullYear() === today.getFullYear()
-  }
-  return checkDate(l.first_open_payable_month ? `${l.first_open_payable_month}-01` : null) ||
-    checkDate(l.last_open_payable_month ? `${l.last_open_payable_month}-01` : null) ||
-    (l.open_payable_count > 0 && isStarted(l))
+function startedSince(l: Lease, since: Date) {
+  if (!l.lease_start_on) return false
+  const d = new Date(l.lease_start_on)
+  return d >= since && d <= today
 }
 
 function pct(n: number, total: number) {
@@ -48,26 +49,69 @@ function pct(n: number, total: number) {
   return `${Math.round((n / total) * 100)}%`
 }
 
-const MONTH_NAME = today.toLocaleString('en-US', { month: 'long', year: 'numeric' })
+// ── Sub-components ────────────────────────────────────────────────────────────
 
-// ── Sub-components ───────────────────────────────────────────────────────────
-
-function StatCard({ value, label, sublabel, color, onClick, dim }: {
+function StatCard({ value, label, sublabel, color, onClick }: {
   value: number | string; label: string; sublabel?: string
-  color: string; onClick?: () => void; dim?: boolean
+  color: string; onClick?: () => void
 }) {
   return (
     <button onClick={onClick} disabled={!onClick}
       style={{
-        background: '#fff', border: `1.5px solid ${dim ? '#E2E8F0' : color + '30'}`,
-        borderRadius: 12, padding: '16px 20px', textAlign: 'left', cursor: onClick ? 'pointer' : 'default',
-        flex: 1, minWidth: 140, transition: 'all 0.15s', opacity: dim ? 0.5 : 1,
-        boxShadow: onClick ? '0 1px 4px rgba(0,0,0,0.06)' : 'none',
+        background: '#fff', border: `1.5px solid ${color}30`,
+        borderRadius: 12, padding: '16px 20px', textAlign: 'left',
+        cursor: onClick ? 'pointer' : 'default', flex: 1, minWidth: 140,
+        transition: 'all 0.15s', boxShadow: onClick ? '0 1px 4px rgba(0,0,0,0.06)' : 'none',
       }}>
       <div style={{ fontSize: 28, fontWeight: 800, color, fontFamily: 'Montserrat, sans-serif', lineHeight: 1 }}>{value}</div>
       <div style={{ fontSize: 12, fontWeight: 700, color: '#1A3A5C', fontFamily: 'Montserrat, sans-serif', marginTop: 4 }}>{label}</div>
       {sublabel && <div style={{ fontSize: 11, color: '#94A3B8', fontFamily: 'Montserrat, sans-serif', marginTop: 2 }}>{sublabel}</div>}
     </button>
+  )
+}
+
+function HealthSection({ title, subtitle, leases, getDone, openPanel }: {
+  title: string; subtitle: string; leases: Lease[]
+  getDone: (l: Lease) => number
+  openPanel: (title: string, ls: Lease[]) => void
+}) {
+  const guaranteed = leases.filter(isGuaranteed)
+  const nonGuaranteed = leases.filter(l => !isGuaranteed(l))
+  const guaranteedPaid = guaranteed.filter(isPaid)
+  const nonGuaranteedPaid = nonGuaranteed.filter(isPaid)
+  const totalPaid = leases.filter(isPaid)
+
+  return (
+    <div style={{ background: '#fff', borderRadius: 14, border: '1px solid #E2E8F0', padding: '20px 24px', marginBottom: 20, boxShadow: '0 1px 4px rgba(0,0,0,0.05)' }}>
+      <div style={{ marginBottom: 16 }}>
+        <div style={{ fontSize: 16, fontWeight: 800, color: '#1A3A5C', fontFamily: 'Montserrat, sans-serif' }}>{title}</div>
+        <div style={{ fontSize: 12, color: '#94A3B8', fontFamily: 'Montserrat, sans-serif', marginTop: 2 }}>{subtitle}</div>
+      </div>
+      <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+        <StatCard value={leases.length} label="Total Leases" sublabel="Started in period" color="#1A3A5C" />
+        <StatCard
+          value={`${guaranteedPaid.length} · ${pct(guaranteedPaid.length, guaranteed.length)}`}
+          label="Guaranteed Paid"
+          sublabel={`of ${guaranteed.length} guaranteed`}
+          color="#059669"
+          onClick={() => openPanel(`${title} — Guaranteed Paid`, guaranteedPaid)}
+        />
+        <StatCard
+          value={`${nonGuaranteedPaid.length} · ${pct(nonGuaranteedPaid.length, nonGuaranteed.length)}`}
+          label="Non-Guarantee Paid"
+          sublabel={`of ${nonGuaranteed.length} non-guarantee`}
+          color="#0891B2"
+          onClick={() => openPanel(`${title} — Non-Guarantee Paid`, nonGuaranteedPaid)}
+        />
+        <StatCard
+          value={`${totalPaid.length} · ${pct(totalPaid.length, leases.length)}`}
+          label="Total Rent Paid"
+          sublabel={`of ${leases.length} started leases`}
+          color="#2DD4A0"
+          onClick={() => openPanel(`${title} — Total Paid`, totalPaid)}
+        />
+      </div>
+    </div>
   )
 }
 
@@ -122,7 +166,7 @@ function MultiSelect({ label, options, selected, onChange }: { label: string; op
   )
 }
 
-// ── Side Panel ───────────────────────────────────────────────────────────────
+// ── Side Panel ────────────────────────────────────────────────────────────────
 
 function ReportSidePanel({ title, leases, trackerHref, onClose }: {
   title: string; leases: PanelLease[]; trackerHref?: string; onClose: () => void
@@ -174,7 +218,7 @@ function ReportSidePanel({ title, leases, trackerHref, onClose }: {
                     <span style={{ padding: '2px 7px', borderRadius: 999, fontSize: 10, fontWeight: 700, color: '#6D28D9', background: '#F5F3FF' }}>{l.lease_type}</span>
                   </td>
                   <td style={{ padding: '10px 14px', whiteSpace: 'nowrap' }}>
-                    <span style={{ fontSize: 11, color: l.rent_payout_status === 'Rent Paid' ? '#059669' : '#DC2626', fontWeight: 600 }}>{l.rent_payout_status}</span>
+                    <span style={{ fontSize: 11, color: l.rent_payout_status?.toLowerCase() === 'paid' ? '#059669' : '#DC2626', fontWeight: 600 }}>{l.rent_payout_status}</span>
                   </td>
                   <td style={{ padding: '10px 14px', whiteSpace: 'nowrap', fontSize: 11, fontWeight: 700, color: '#1A3A5C' }}>${l.rent_amount?.toLocaleString()}</td>
                 </tr>
@@ -194,13 +238,16 @@ export default function ReportsPage() {
   const [checklist, setChecklist] = useState<ChecklistMap>({})
   const [notesMap, setNotesMap] = useState<Record<string, any[]>>({})
   const [loading, setLoading] = useState(true)
-
-  // Filters for operational + concierge sections
   const [selConcierges, setSelConcierges] = useState<string[]>([])
   const [selTypes, setSelTypes] = useState<string[]>([])
-
-  // Side panel
   const [panel, setPanel] = useState<{ title: string; leases: PanelLease[]; trackerHref?: string } | null>(null)
+  const [trackerSortCol, setTrackerSortCol] = useState<string>('failed')
+  const [trackerSortDir, setTrackerSortDir] = useState<'asc' | 'desc'>('desc')
+
+  const handleTrackerSort = (col: string) => {
+    if (trackerSortCol === col) setTrackerSortDir(d => d === 'asc' ? 'desc' : 'asc')
+    else { setTrackerSortCol(col); setTrackerSortDir('desc') }
+  }
 
   const loadData = useCallback(async () => {
     const [{ data: lData }, { data: cData }, { data: nData }] = await Promise.all([
@@ -257,60 +304,50 @@ export default function ReportsPage() {
   const allConcierges = Array.from(new Set(leases.map(l => l.concierge).filter(Boolean))).sort() as string[]
   const allLeaseTypes = Array.from(new Set(leases.map(l => l.lease_type).filter(Boolean))).sort() as string[]
 
-  // Apply operational filters
   const applyFilters = (ls: Lease[]) => ls.filter(l =>
     (selConcierges.length === 0 || selConcierges.includes(l.concierge)) &&
     (selTypes.length === 0 || selTypes.includes(l.lease_type))
   )
 
-  // ── Section 1: YTD Health (no filters, started only) ──────────────────────
-  const startedLeases = leases.filter(isStarted)
-  const guaranteedStarted = startedLeases.filter(isGuaranteed)
-  const nonGuaranteedStarted = startedLeases.filter(l => !isGuaranteed(l))
-  const guaranteedPaid = guaranteedStarted.filter(isPaid)
-  const nonGuaranteedPaid = nonGuaranteedStarted.filter(isPaid)
-  const totalPaid = startedLeases.filter(isPaid)
+  // ── Section 1: Health periods (no filters) ────────────────────────────────
+  const startedYTD = leases.filter(isStarted)
+  const startedQTD = leases.filter(l => startedSince(l, startOfQuarter))
+  const startedMTD = leases.filter(l => startedSince(l, startOfMonth))
 
   // ── Section 2: Operational (filtered) ────────────────────────────────────
   const filteredStarted = applyFilters(leases.filter(isStarted))
   const filteredUpcoming = applyFilters(leases.filter(isUpcoming))
 
-  const rentFailed = filteredStarted.filter(l => l.rent_payout_status === 'Rent Failed')
-  const readyToInitiate = filteredStarted.filter(l => l.manual_status === 'ready' || l.rent_payout_status === 'Ready to Initiate')
-  const processing = filteredStarted.filter(l => l.manual_status === 'processing' || l.rent_payout_status === 'Processing')
+  const rentFailed = filteredStarted.filter(l => {
+    const done = getDone(l)
+    return !isPaid(l) && l.manual_status !== 'processing' && done < CHECKLIST_ITEMS.length
+  })
+  const readyToInitiate = filteredStarted.filter(l => {
+    const done = getDone(l)
+    return !isPaid(l) && l.manual_status !== 'processing' && done === CHECKLIST_ITEMS.length
+  })
+  const processing = filteredStarted.filter(l => !isPaid(l) && l.manual_status === 'processing')
   const failedTotal = rentFailed.length + readyToInitiate.length + processing.length
 
   const upcomingTotal = filteredUpcoming
   const upcomingReady = filteredUpcoming.filter(getSetupComplete)
   const upcomingPending = filteredUpcoming.filter(l => !getSetupComplete(l))
 
-  // ── Section 3: Progress Tracker per concierge (current month) ────────────
+  // ── Section 3: Progress Tracker per concierge ────────────────────────────
   const conciergeList = selConcierges.length > 0 ? selConcierges : allConcierges
 
-  const getConciergeMonthLeases = (concierge: string) => {
-    return leases.filter(l =>
-      l.concierge === concierge &&
-      (selTypes.length === 0 || selTypes.includes(l.lease_type))
-    )
-  }
+  const getConciergeLeases = (concierge: string) =>
+    leases.filter(l => l.concierge === concierge && (selTypes.length === 0 || selTypes.includes(l.lease_type)))
 
   // ── Section 4: Failed Detail per concierge ───────────────────────────────
-  const getConciergeFailed = (concierge: string) => {
-    return leases.filter(l =>
-      l.concierge === concierge &&
-      isStarted(l) && !isPaid(l) &&
-      (selTypes.length === 0 || selTypes.includes(l.lease_type))
-    )
-  }
+  const getConciergeFailed = (concierge: string) =>
+    leases.filter(l => l.concierge === concierge && isStarted(l) && !isPaid(l) && (selTypes.length === 0 || selTypes.includes(l.lease_type)))
 
   // ── Section 5: Compliance ─────────────────────────────────────────────────
   const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)
 
   const getConciergeUnpaid = (concierge: string) =>
-    leases.filter(l =>
-      l.concierge === concierge && isStarted(l) && !isPaid(l) &&
-      (selTypes.length === 0 || selTypes.includes(l.lease_type))
-    )
+    leases.filter(l => l.concierge === concierge && isStarted(l) && !isPaid(l) && (selTypes.length === 0 || selTypes.includes(l.lease_type)))
 
   if (loading) return (
     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh', background: '#F5F7FA' }}>
@@ -324,6 +361,8 @@ export default function ReportsPage() {
       {n}
     </button>
   )
+
+  const resetFilters = () => { setSelConcierges([]); setSelTypes([]) }
 
   return (
     <div style={{ minHeight: '100vh', background: '#F5F7FA', fontFamily: 'Montserrat, sans-serif' }}>
@@ -348,54 +387,48 @@ export default function ReportsPage() {
 
       <div style={{ padding: '24px', maxWidth: 1200, margin: '0 auto' }}>
 
-        {/* ── Section 1: YTD Health ─────────────────────────────────────────── */}
-        <div style={{ background: '#fff', borderRadius: 14, border: '1px solid #E2E8F0', padding: '20px 24px', marginBottom: 20, boxShadow: '0 1px 4px rgba(0,0,0,0.05)' }}>
-          <SectionHeader title="YTD Payment Health" subtitle={`Year to date · started leases only · as of today`} />
-          <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
-            <StatCard value={startedLeases.length} label="Total Leases" sublabel="Started to date" color="#1A3A5C" />
-            <StatCard
-              value={`${guaranteedPaid.length} · ${pct(guaranteedPaid.length, guaranteedStarted.length)}`}
-              label="Guaranteed Paid"
-              sublabel={`of ${guaranteedStarted.length} guaranteed leases`}
-              color="#059669"
-              onClick={() => openPanel('Guaranteed Paid', guaranteedPaid)}
-            />
-            <StatCard
-              value={`${nonGuaranteedPaid.length} · ${pct(nonGuaranteedPaid.length, nonGuaranteedStarted.length)}`}
-              label="Non-Guarantee Paid"
-              sublabel={`of ${nonGuaranteedStarted.length} non-guarantee leases`}
-              color="#0891B2"
-              onClick={() => openPanel('Non-Guarantee Paid', nonGuaranteedPaid)}
-            />
-            <StatCard
-              value={`${totalPaid.length} · ${pct(totalPaid.length, startedLeases.length)}`}
-              label="Total Rent Paid"
-              sublabel={`of ${startedLeases.length} started leases`}
-              color="#2DD4A0"
-              onClick={() => openPanel('Total Rent Paid', totalPaid)}
-            />
-          </div>
-        </div>
+        {/* ── Section 1a: YTD Health ────────────────────────────────────────── */}
+        <HealthSection
+          title="YTD Payment Health"
+          subtitle={`Jan 1 – today · started leases only · as of today`}
+          leases={startedYTD}
+          getDone={getDone}
+          openPanel={openPanel}
+        />
+
+        {/* ── Section 1b: QTD Health ────────────────────────────────────────── */}
+        <HealthSection
+          title={`${QUARTER_LABEL} Payment Health`}
+          subtitle={`${startOfQuarter.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} – today · started leases only`}
+          leases={startedQTD}
+          getDone={getDone}
+          openPanel={openPanel}
+        />
+
+        {/* ── Section 1c: MTD Health ────────────────────────────────────────── */}
+        <HealthSection
+          title={`${MONTH_LABEL} Payment Health`}
+          subtitle={`${startOfMonth.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} – today · started leases only`}
+          leases={startedMTD}
+          getDone={getDone}
+          openPanel={openPanel}
+        />
 
         {/* ── Section 2: Operational ───────────────────────────────────────── */}
         <div style={{ background: '#fff', borderRadius: 14, border: '1px solid #E2E8F0', padding: '20px 24px', marginBottom: 20, boxShadow: '0 1px 4px rgba(0,0,0,0.05)' }}>
           <SectionHeader title="Operational Overview" subtitle="Started & upcoming leases · filtered" />
-          <FilterBar concierges={allConcierges} leaseTypes={allLeaseTypes} selConcierges={selConcierges} selTypes={selTypes} onConcierges={setSelConcierges} onTypes={setSelTypes} onReset={() => { setSelConcierges([]); setSelTypes([]) }} />
+          <FilterBar concierges={allConcierges} leaseTypes={allLeaseTypes} selConcierges={selConcierges} selTypes={selTypes} onConcierges={setSelConcierges} onTypes={setSelTypes} onReset={resetFilters} />
 
           <div style={{ display: 'flex', gap: 20, flexWrap: 'wrap' }}>
-            {/* Current failures */}
             <div style={{ flex: 1, minWidth: 280 }}>
               <div style={{ fontSize: 11, fontWeight: 700, color: '#94A3B8', letterSpacing: '0.06em', marginBottom: 10 }}>CURRENT FAILURES</div>
               <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-                <StatCard value={rentFailed.length} label="Rent Failed" sublabel={pct(rentFailed.length, failedTotal) + ' of failed'} color="#DC2626" onClick={() => openPanel('Rent Failed', rentFailed, { status: 'failed', ...(selConcierges.length === 1 ? { concierge: selConcierges[0] } : {}) })} />
+                <StatCard value={rentFailed.length} label="Rent Failed" sublabel={pct(rentFailed.length, failedTotal) + ' of failed'} color="#DC2626" onClick={() => openPanel('Rent Failed', rentFailed, selConcierges.length === 1 ? { concierge: selConcierges[0] } : undefined)} />
                 <StatCard value={readyToInitiate.length} label="Ready to Initiate" sublabel={pct(readyToInitiate.length, failedTotal) + ' of failed'} color="#F59E0B" onClick={() => openPanel('Ready to Initiate', readyToInitiate)} />
                 <StatCard value={processing.length} label="Processing" sublabel={pct(processing.length, failedTotal) + ' of failed'} color="#06B6D4" onClick={() => openPanel('Processing', processing)} />
               </div>
             </div>
-
             <div style={{ width: 1, background: '#E2E8F0', alignSelf: 'stretch' }} />
-
-            {/* Upcoming */}
             <div style={{ flex: 1, minWidth: 280 }}>
               <div style={{ fontSize: 11, fontWeight: 700, color: '#94A3B8', letterSpacing: '0.06em', marginBottom: 10 }}>UPCOMING LEASES</div>
               <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
@@ -410,37 +443,62 @@ export default function ReportsPage() {
         {/* ── Section 3: Progress Tracker per concierge ────────────────────── */}
         <div style={{ background: '#fff', borderRadius: 14, border: '1px solid #E2E8F0', padding: '20px 24px', marginBottom: 20, boxShadow: '0 1px 4px rgba(0,0,0,0.05)' }}>
           <SectionHeader title="Concierge Progress Tracker" subtitle={`${MONTH_NAME} · by booked balance`} />
-          <FilterBar concierges={allConcierges} leaseTypes={allLeaseTypes} selConcierges={selConcierges} selTypes={selTypes} onConcierges={setSelConcierges} onTypes={setSelTypes} onReset={() => { setSelConcierges([]); setSelTypes([]) }} />
-
+          <FilterBar concierges={allConcierges} leaseTypes={allLeaseTypes} selConcierges={selConcierges} selTypes={selTypes} onConcierges={setSelConcierges} onTypes={setSelTypes} onReset={resetFilters} />
           <div style={{ overflowX: 'auto' }}>
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
               <thead>
                 <tr style={{ background: '#F8FAFC', borderBottom: '2px solid #E2E8F0' }}>
-                  {['Concierge', 'Paid', 'Failed', 'Processing', 'Ready', 'Upcoming', 'Setup ✓', 'Pending'].map(h => (
-                    <th key={h} style={{ padding: '10px 14px', textAlign: h === 'Concierge' ? 'left' : 'center', fontSize: 10, fontWeight: 700, color: '#94A3B8', letterSpacing: '0.06em', whiteSpace: 'nowrap' }}>{h.toUpperCase()}</th>
+                  {[
+                    { key: 'concierge', label: 'Concierge' },
+                    { key: 'paid', label: 'Paid' },
+                    { key: 'failed', label: 'Failed' },
+                    { key: 'processing', label: 'Processing' },
+                    { key: 'ready', label: 'Ready' },
+                    { key: 'upcoming', label: 'Upcoming' },
+                    { key: 'upReady', label: 'Setup ✓' },
+                    { key: 'upPending', label: 'Pending' },
+                  ].map(({ key, label }) => (
+                    <th key={key} onClick={() => handleTrackerSort(key)}
+                      style={{ padding: '10px 14px', textAlign: key === 'concierge' ? 'left' : 'center', fontSize: 10, fontWeight: 700, color: trackerSortCol === key ? '#2C4F6B' : '#94A3B8', letterSpacing: '0.06em', whiteSpace: 'nowrap', cursor: 'pointer', userSelect: 'none' }}>
+                      {label.toUpperCase()} {trackerSortCol === key ? (trackerSortDir === 'asc' ? '↑' : '↓') : ''}
+                    </th>
                   ))}
                 </tr>
               </thead>
               <tbody>
-                {conciergeList.map((concierge, i) => {
-                  const all = getConciergeMonthLeases(concierge)
+                {conciergeList.map(concierge => {
+                  const all = getConciergeLeases(concierge)
                   const started = all.filter(isStarted)
                   const upcoming = all.filter(isUpcoming)
                   const paid = started.filter(isPaid)
-                  const failed = started.filter(l => !isPaid(l))
-                  const proc = started.filter(l => l.manual_status === 'processing')
-                  const ready = started.filter(l => l.rent_payout_status === 'Ready to Initiate')
+                  const failed = started.filter(l => !isPaid(l) && l.manual_status !== 'processing' && getDone(l) < CHECKLIST_ITEMS.length)
+                  const proc = started.filter(l => !isPaid(l) && l.manual_status === 'processing')
+                  const ready = started.filter(l => !isPaid(l) && l.manual_status !== 'processing' && getDone(l) === CHECKLIST_ITEMS.length)
                   const upReady = upcoming.filter(getSetupComplete)
                   const upPending = upcoming.filter(l => !getSetupComplete(l))
+                  return { concierge, paid, failed, proc, ready, upcoming, upReady, upPending }
+                }).sort((a, b) => {
+                  let av: any, bv: any
+                  if (trackerSortCol === 'concierge') { av = a.concierge; bv = b.concierge }
+                  else if (trackerSortCol === 'paid') { av = a.paid.length; bv = b.paid.length }
+                  else if (trackerSortCol === 'failed') { av = a.failed.length; bv = b.failed.length }
+                  else if (trackerSortCol === 'processing') { av = a.proc.length; bv = b.proc.length }
+                  else if (trackerSortCol === 'ready') { av = a.ready.length; bv = b.ready.length }
+                  else if (trackerSortCol === 'upcoming') { av = a.upcoming.length; bv = b.upcoming.length }
+                  else if (trackerSortCol === 'upReady') { av = a.upReady.length; bv = b.upReady.length }
+                  else if (trackerSortCol === 'upPending') { av = a.upPending.length; bv = b.upPending.length }
+                  if (av < bv) return trackerSortDir === 'asc' ? -1 : 1
+                  if (av > bv) return trackerSortDir === 'asc' ? 1 : -1
+                  return 0
+                }).map(({ concierge, paid, failed, proc, ready, upcoming, upReady, upPending }, i) => {
                   const tp = { concierge }
-
                   return (
                     <tr key={concierge} style={{ borderBottom: '1px solid #F0F4F8', background: i % 2 === 0 ? '#fff' : '#FAFBFC' }}>
                       <td style={{ padding: '12px 14px', fontWeight: 700, color: '#1A3A5C', fontSize: 13 }}>{concierge}</td>
                       <td style={{ padding: '12px 14px', textAlign: 'center' }}>{cardBtn(paid.length, '#059669', () => openPanel(`${concierge} — Paid`, paid, tp))}</td>
                       <td style={{ padding: '12px 14px', textAlign: 'center' }}>{cardBtn(failed.length, '#DC2626', () => openPanel(`${concierge} — Failed`, failed, tp))}</td>
                       <td style={{ padding: '12px 14px', textAlign: 'center' }}>{cardBtn(proc.length, '#06B6D4', () => openPanel(`${concierge} — Processing`, proc, tp))}</td>
-                      <td style={{ padding: '12px 14px', textAlign: 'center' }}>{cardBtn(ready.length, '#F59E0B', () => openPanel(`${concierge} — Ready`, ready, tp))}</td>
+                      <td style={{ padding: '12px 14px', textAlign: 'center' }}>{cardBtn(ready.length, '#F59E0B', () => openPanel(`${concierge} — Ready to Initiate`, ready, tp))}</td>
                       <td style={{ padding: '12px 14px', textAlign: 'center' }}>{cardBtn(upcoming.length, '#6D28D9', () => openPanel(`${concierge} — Upcoming`, upcoming, tp))}</td>
                       <td style={{ padding: '12px 14px', textAlign: 'center' }}>{cardBtn(upReady.length, '#059669', () => openPanel(`${concierge} — Setup Complete`, upReady, tp))}</td>
                       <td style={{ padding: '12px 14px', textAlign: 'center' }}>{cardBtn(upPending.length, '#F59E0B', () => openPanel(`${concierge} — Pending Setup`, upPending, tp))}</td>
@@ -455,8 +513,7 @@ export default function ReportsPage() {
         {/* ── Section 4: Failed Detail per concierge ───────────────────────── */}
         <div style={{ background: '#fff', borderRadius: 14, border: '1px solid #E2E8F0', padding: '20px 24px', marginBottom: 20, boxShadow: '0 1px 4px rgba(0,0,0,0.05)' }}>
           <SectionHeader title="Failed Payment Detail" subtitle="All started leases · unpaid · broken down by lease type" />
-          <FilterBar concierges={allConcierges} leaseTypes={allLeaseTypes} selConcierges={selConcierges} selTypes={selTypes} onConcierges={setSelConcierges} onTypes={setSelTypes} onReset={() => { setSelConcierges([]); setSelTypes([]) }} />
-
+          <FilterBar concierges={allConcierges} leaseTypes={allLeaseTypes} selConcierges={selConcierges} selTypes={selTypes} onConcierges={setSelConcierges} onTypes={setSelTypes} onReset={resetFilters} />
           <div style={{ overflowX: 'auto' }}>
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
               <thead>
@@ -501,8 +558,7 @@ export default function ReportsPage() {
         {/* ── Section 5: Compliance Tracker ────────────────────────────────── */}
         <div style={{ background: '#fff', borderRadius: 14, border: '1px solid #E2E8F0', padding: '20px 24px', marginBottom: 20, boxShadow: '0 1px 4px rgba(0,0,0,0.05)' }}>
           <SectionHeader title="Compliance Tracker" subtitle="Unpaid leases only · data quality & escalation" />
-          <FilterBar concierges={allConcierges} leaseTypes={allLeaseTypes} selConcierges={selConcierges} selTypes={selTypes} onConcierges={setSelConcierges} onTypes={setSelTypes} onReset={() => { setSelConcierges([]); setSelTypes([]) }} />
-
+          <FilterBar concierges={allConcierges} leaseTypes={allLeaseTypes} selConcierges={selConcierges} selTypes={selTypes} onConcierges={setSelConcierges} onTypes={setSelTypes} onReset={resetFilters} />
           <div style={{ overflowX: 'auto' }}>
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
               <thead>
@@ -517,35 +573,23 @@ export default function ReportsPage() {
                   const unpaid = getConciergeUnpaid(concierge)
                   const missingNotes = unpaid.filter(l => !notesMap[l.lease_id]?.length)
                   const missingIntercom = unpaid.filter(l => !l.intercom_link)
-                  const staleNotes = unpaid.filter(l => {
-                    if (!l.last_note_at) return true
-                    return new Date(l.last_note_at) < sevenDaysAgo
-                  })
+                  const staleNotes = unpaid.filter(l => !l.last_note_at || new Date(l.last_note_at) < sevenDaysAgo)
                   const escalated = unpaid.filter(l => l.escalated)
                   const tp = { concierge }
-
                   return (
                     <tr key={concierge} style={{ borderBottom: '1px solid #F0F4F8', background: i % 2 === 0 ? '#fff' : '#FAFBFC' }}>
                       <td style={{ padding: '12px 14px', fontWeight: 700, color: '#1A3A5C', fontSize: 13 }}>{concierge}</td>
                       <td style={{ padding: '12px 14px', textAlign: 'center' }}>
-                        {missingNotes.length > 0
-                          ? cardBtn(missingNotes.length, '#DC2626', () => openPanel(`${concierge} — Missing Notes`, missingNotes, tp))
-                          : <span style={{ color: '#2DD4A0', fontSize: 13, fontWeight: 700 }}>✓</span>}
+                        {missingNotes.length > 0 ? cardBtn(missingNotes.length, '#DC2626', () => openPanel(`${concierge} — Missing Notes`, missingNotes, tp)) : <span style={{ color: '#2DD4A0', fontSize: 13, fontWeight: 700 }}>✓</span>}
                       </td>
                       <td style={{ padding: '12px 14px', textAlign: 'center' }}>
-                        {missingIntercom.length > 0
-                          ? cardBtn(missingIntercom.length, '#F59E0B', () => openPanel(`${concierge} — Missing Intercom`, missingIntercom, tp))
-                          : <span style={{ color: '#2DD4A0', fontSize: 13, fontWeight: 700 }}>✓</span>}
+                        {missingIntercom.length > 0 ? cardBtn(missingIntercom.length, '#F59E0B', () => openPanel(`${concierge} — Missing Intercom`, missingIntercom, tp)) : <span style={{ color: '#2DD4A0', fontSize: 13, fontWeight: 700 }}>✓</span>}
                       </td>
                       <td style={{ padding: '12px 14px', textAlign: 'center' }}>
-                        {staleNotes.length > 0
-                          ? cardBtn(staleNotes.length, '#F59E0B', () => openPanel(`${concierge} — Stale Notes`, staleNotes, tp))
-                          : <span style={{ color: '#2DD4A0', fontSize: 13, fontWeight: 700 }}>✓</span>}
+                        {staleNotes.length > 0 ? cardBtn(staleNotes.length, '#F59E0B', () => openPanel(`${concierge} — Stale Notes`, staleNotes, tp)) : <span style={{ color: '#2DD4A0', fontSize: 13, fontWeight: 700 }}>✓</span>}
                       </td>
                       <td style={{ padding: '12px 14px', textAlign: 'center' }}>
-                        {escalated.length > 0
-                          ? cardBtn(escalated.length, '#DC2626', () => openPanel(`${concierge} — Escalated`, escalated, tp))
-                          : <span style={{ color: '#94A3B8', fontSize: 13 }}>—</span>}
+                        {escalated.length > 0 ? cardBtn(escalated.length, '#DC2626', () => openPanel(`${concierge} — Escalated`, escalated, tp)) : <span style={{ color: '#94A3B8', fontSize: 13 }}>—</span>}
                       </td>
                     </tr>
                   )
