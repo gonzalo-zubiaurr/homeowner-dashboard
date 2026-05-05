@@ -2,12 +2,23 @@ import { createClient } from '@supabase/supabase-js'
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+
 export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   auth: {
     detectSessionInUrl: true,
     flowType: 'implicit',
     persistSession: true,
-  }
+  },
+  realtime: {
+    params: {
+      eventsPerSecond: 10,
+    },
+  },
+  global: {
+    headers: {
+      'apikey': supabaseAnonKey,
+    },
+  },
 })
 
 export type Lease = {
@@ -94,10 +105,10 @@ export function computeStatus(lease: Lease, checklistDone: number): ComputedStat
 }
 
 export const STATUS_CONFIG: Record<ComputedStatus, { label: string; color: string; bg: string; priority: number; italic?: boolean; tooltip: string }> = {
-  paid:                 { label: 'Rent Paid',          color: '#0A6B4A', bg: '#E8FBF5', priority: 1, tooltip: 'Payment confirmed by system' },
-  processing:           { label: 'Processing',          color: '#06B6D4', bg: '#ECFEFF', priority: 2, tooltip: 'Team has initiated payment, awaiting confirmation' },
-  ready_to_initiate:    { label: 'Ready to Initiate',  color: '#2563EB', bg: '#EFF6FF', priority: 3, tooltip: 'Setup complete, rent is due — process now' },
-  rent_failed:          { label: 'Rent Failed',         color: '#DC2626', bg: '#FEF2F2', priority: 4, tooltip: 'Rent is overdue and setup is incomplete' },
-  setup_complete_future:{ label: 'Setup Complete',      color: '#2DD4A0', bg: '#E8FBF5', priority: 5, italic: true, tooltip: 'Setup done, rent not yet due — no action needed' },
-  pending_setup_future: { label: 'Pending Setup',       color: '#F59E0B', bg: '#FFFBEB', priority: 6, italic: true, tooltip: 'Rent not yet due but setup is incomplete' },
+  paid:                  { label: 'Rent Paid',         color: '#0A6B4A', bg: '#E8FBF5', priority: 1, tooltip: 'Payment confirmed by system' },
+  processing:            { label: 'Processing',         color: '#06B6D4', bg: '#ECFEFF', priority: 2, tooltip: 'Team has initiated payment, awaiting confirmation' },
+  ready_to_initiate:     { label: 'Ready to Initiate', color: '#2563EB', bg: '#EFF6FF', priority: 3, tooltip: 'Setup complete, rent is due — process now' },
+  rent_failed:           { label: 'Rent Failed',        color: '#DC2626', bg: '#FEF2F2', priority: 4, tooltip: 'Rent is overdue and setup is incomplete' },
+  setup_complete_future: { label: 'Setup Complete',     color: '#2DD4A0', bg: '#E8FBF5', priority: 5, italic: true, tooltip: 'Setup done, rent not yet due — no action needed' },
+  pending_setup_future:  { label: 'Pending Setup',      color: '#F59E0B', bg: '#FFFBEB', priority: 6, italic: true, tooltip: 'Rent not yet due but setup is incomplete' },
 }
