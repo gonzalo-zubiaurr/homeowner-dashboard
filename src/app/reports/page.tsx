@@ -21,12 +21,13 @@ const MONTH_LABEL = today.toLocaleString('en-US', { month: 'long', year: 'numeri
 
 // ── Lease helpers ─────────────────────────────────────────────────────────────
 
-function isStarted(l: Lease) { return !!l.lease_start_on && new Date(l.lease_start_on) <= today }
-function isUpcoming(l: Lease) { return !!l.lease_start_on && new Date(l.lease_start_on) > today }
+function isActive(l: Lease) { return l.agreement_status?.toLowerCase() === 'active' }
+function isStarted(l: Lease) { return isActive(l) && !!l.lease_start_on && new Date(l.lease_start_on) <= today }
+function isUpcoming(l: Lease) { return isActive(l) && !!l.lease_start_on && new Date(l.lease_start_on) > today }
 function isPaid(l: Lease) { return l.rent_payout_status?.toLowerCase() === 'paid' }
 function isGuaranteed(l: Lease) { return l.payout_plan === 'Monthly' }
 function startedSince(l: Lease, since: Date) {
-  if (!l.lease_start_on) return false
+  if (!l.lease_start_on || !isActive(l)) return false
   const d = new Date(l.lease_start_on)
   return d >= since && d <= today
 }
@@ -304,8 +305,20 @@ export default function ReportsPage() {
   const conciergeData = conciergeList.map(getConciergeData)
 
   // ── Wall of Fame ──────────────────────────────────────────────────────────
-  const wallOfFame = conciergeData
-    .filter(d => d.totalFailed === 0 && d.paid.length > 0)
+  const currentMonth = today.toLocaleString('en-US', { month: 'short', year: 'numeric' }) // e.g. "May 2026"
+  const hasCurrentMonthBalance = (l: Lease) =>
+    l.first_open_payable_month === currentMonth || l.last_open_payable_month === currentMonth
+
+  const wallOfFame = allConcierges.map(concierge => {
+    const monthLeases = leases.filter(l =>
+      l.concierge === concierge && isActive(l) && hasCurrentMonthBalance(l)
+    )
+    const paid = monthLeases.filter(isPaid)
+    const failed = monthLeases.filter(l => !isPaid(l))
+    const d = conciergeData.find(x => x.concierge === concierge)!
+    return { concierge, monthLeases, paid, failed, upPending: d?.upPending || [] }
+  })
+    .filter(d => d.monthLeases.length > 0 && d.failed.length === 0)
     .sort((a, b) => {
       if (a.upPending.length !== b.upPending.length) return a.upPending.length - b.upPending.length
       return b.paid.length - a.paid.length
@@ -375,13 +388,13 @@ export default function ReportsPage() {
         {wallOfFame.length > 0 && (
           <div style={{ background: 'linear-gradient(135deg, #1A3A5C 0%, #2C4F6B 100%)', borderRadius: 14, padding: '20px 24px', marginBottom: 20, boxShadow: '0 2px 12px rgba(44,79,107,0.2)' }}>
             <div style={{ fontSize: 15, fontWeight: 800, color: '#fff', fontFamily: 'Montserrat, sans-serif', marginBottom: 4 }}>🏆 Wall of Fame</div>
-            <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.6)', fontFamily: 'Montserrat, sans-serif', marginBottom: 16 }}>Concierges with zero failed payments on started leases</div>
+            <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.6)', fontFamily: 'Montserrat, sans-serif', marginBottom: 16 }}>Concierges with zero failed payments on {currentMonth} balances</div>
             <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
               {wallOfFame.map((d, i) => (
                 <div key={d.concierge} style={{ flex: 1, minWidth: 160, background: 'rgba(255,255,255,0.1)', borderRadius: 10, padding: '14px 18px', border: '1px solid rgba(255,255,255,0.15)' }}>
                   <div style={{ fontSize: 22, marginBottom: 4 }}>{medals[i]}</div>
                   <div style={{ fontSize: 14, fontWeight: 800, color: '#fff', fontFamily: 'Montserrat, sans-serif' }}>{d.concierge}</div>
-                  <div style={{ fontSize: 11, color: '#2DD4A0', fontFamily: 'Montserrat, sans-serif', marginTop: 4, fontWeight: 600 }}>{d.paid.length} paid · {d.upPending.length} pending setup</div>
+                  <div style={{ fontSize: 11, color: '#2DD4A0', fontFamily: 'Montserrat, sans-serif', marginTop: 4, fontWeight: 600 }}>{d.paid.length} paid this month · {d.upPending.length} pending setup</div>
                 </div>
               ))}
             </div>
