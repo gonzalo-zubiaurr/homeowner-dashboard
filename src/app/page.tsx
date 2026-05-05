@@ -265,6 +265,7 @@ function DashboardInner() {
   const [liveIndicator, setLiveIndicator] = useState(false)
   const [user, setUser] = useState<User | null>(null)
   const liveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const selectedLeaseRef = useRef<Lease | null>(null)
 
   const [search, setSearch] = useState('')
   const [filterConcierges, setFilterConcierges] = useState<string[]>(searchParams.getAll('concierge') || [])
@@ -312,6 +313,8 @@ function DashboardInner() {
     setLoading(false)
   }, [])
 
+  useEffect(() => { selectedLeaseRef.current = selectedLease }, [selectedLease])
+
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
       if (!session) { window.location.replace('/login'); return }
@@ -324,7 +327,7 @@ function DashboardInner() {
         flashLive()
         const row = p.new as Lease
         setLeases(prev => { const idx = prev.findIndex(l => l.lease_id === row.lease_id); if (idx >= 0) { const n = [...prev]; n[idx] = row; return n } return [...prev, row] })
-        if (selectedLease?.lease_id === row.lease_id) setSelectedLease(row)
+        if (selectedLeaseRef.current?.lease_id === row.lease_id) setSelectedLease(row)
       })
       .on('postgres_changes', { event: '*', schema: 'public', table: 'checklist_items' }, (p) => {
         flashLive()
@@ -339,7 +342,7 @@ function DashboardInner() {
       })
       .subscribe()
     return () => { supabase.removeChannel(ch) }
-  }, [loadData, flashLive, selectedLease?.lease_id])
+  }, [loadData, flashLive])
 
   const handleToggle = async (homeId: string, key: string, current: boolean) => {
     const k = `${homeId}:${key}`
