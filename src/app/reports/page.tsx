@@ -219,7 +219,7 @@ export default function ReportsPage() {
   const getStatus = (l: Lease) => computeStatus(l, getDone(l))
 
   // Section 1 — Status breakdown
-  const statusCounts: Record<ComputedStatus, Lease[]> = { failed: [], ready_to_process: [], processing: [], ready_to_pay: [], pending: [], paid: [] }
+  const statusCounts: Record<ComputedStatus, Lease[]> = { paid: [], processing: [], ready_to_initiate: [], rent_failed: [], setup_complete_future: [], pending_setup_future: [] }
   filtered.forEach(l => statusCounts[getStatus(l)].push(l))
   const totalRentAtRisk = filtered.filter(l => getStatus(l) !== 'paid').reduce((sum, l) => sum + (l.rent_amount || 0), 0)
   const totalOpenBalance = filtered.reduce((sum, l) => sum + (l.open_payable_balance || 0), 0)
