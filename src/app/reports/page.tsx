@@ -21,7 +21,7 @@ const MONTH_LABEL = today.toLocaleString('en-US', { month: 'long', year: 'numeri
 
 // ── Lease helpers ─────────────────────────────────────────────────────────────
 
-function isActive(l: Lease) { return l.agreement_status?.toLowerCase() === 'active' }
+function isActive(l: Lease) { return l.lease_status === 'Active' }
 function isStarted(l: Lease) { return isActive(l) && !!l.lease_start_on && new Date(l.lease_start_on) <= today }
 function isUpcoming(l: Lease) { return isActive(l) && !!l.lease_start_on && new Date(l.lease_start_on) > today }
 function isPaid(l: Lease) { return l.rent_payout_status?.toLowerCase() === 'paid' }
@@ -257,8 +257,9 @@ export default function ReportsPage() {
     setPanel({ title, leases: ls.map(toPanelLease), trackerHref })
   }
 
-  const allConcierges = Array.from(new Set(leases.map(l => l.concierge).filter(Boolean))).sort() as string[]
-  const allLeaseTypes = Array.from(new Set(leases.map(l => l.lease_type).filter(Boolean))).sort() as string[]
+  const activeLeases = leases.filter(isActive)
+  const allConcierges = Array.from(new Set(activeLeases.map(l => l.concierge).filter(Boolean))).sort() as string[]
+  const allLeaseTypes = Array.from(new Set(activeLeases.map(l => l.lease_type).filter(Boolean))).sort() as string[]
   const applyFilters = (ls: Lease[]) => ls.filter(l => (selConcierges.length === 0 || selConcierges.includes(l.concierge)) && (selTypes.length === 0 || selTypes.includes(l.lease_type)))
   const resetFilters = () => { setSelConcierges([]); setSelTypes([]) }
 
