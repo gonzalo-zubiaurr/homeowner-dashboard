@@ -28,7 +28,7 @@ function isUpcoming(l: Lease) {
   return new Date(l.lease_start_on) > today
 }
 
-function isPaid(l: Lease) { return l.rent_payout_status === 'Rent Paid' }
+function isPaid(l: Lease) { return l.rent_payout_status === 'Paid' }
 function isGuaranteed(l: Lease) { return l.payout_plan === 'Monthly' }
 function isFailed(l: Lease) { return isStarted(l) && !isPaid(l) }
 
