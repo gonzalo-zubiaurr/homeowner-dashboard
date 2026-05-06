@@ -14,11 +14,6 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
       eventsPerSecond: 10,
     },
   },
-  global: {
-    headers: {
-      'apikey': supabaseAnonKey,
-    },
-  },
 })
 
 export type Lease = {
