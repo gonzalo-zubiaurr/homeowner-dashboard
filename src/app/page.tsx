@@ -290,7 +290,7 @@ function DashboardInner() {
   const loadData = useCallback(async () => {
     const [{ data: lData }, { data: cData }, { data: nData }] = await Promise.all([
       supabase.from('leases').select('*'),
-      supabase.from('checklist_items').select('*'),
+      supabase.from('checklist_items').select('*').limit(50000),
       supabase.from('lease_notes').select('*').order('created_at', { ascending: false }),
     ])
     if (lData) setLeases(lData)
