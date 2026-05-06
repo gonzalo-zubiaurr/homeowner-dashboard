@@ -361,6 +361,16 @@ function DashboardInner() {
 
   const handleAddNote = async (leaseId: string, note: string) => {
     const author = user?.email?.split('@')[0] || user?.email || 'Unknown'
+    const now = new Date().toISOString()
+    const optimisticNote: LeaseNote = {
+      id: crypto.randomUUID(),
+      lease_id: leaseId,
+      note,
+      author,
+      created_at: now,
+    }
+    setNotesMap(prev => ({ ...prev, [leaseId]: [optimisticNote, ...(prev[leaseId] || [])] }))
+    setLeases(prev => prev.map(l => l.lease_id === leaseId ? { ...l, last_note_at: now } : l))
     await fetch('/api/add-note', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ lease_id: leaseId, note, author }) })
   }
 
