@@ -59,7 +59,7 @@ export async function POST(req: NextRequest) {
     // Preserve manually-set fields
     const { data: existing, error: fetchError } = await supabase
       .from('leases')
-      .select('lease_id,manual_status,notes,escalated')
+      .select('lease_id,manual_status,notes,escalated,intercom_link,escalation_slack_link,tags')
     if (fetchError) console.error('[upload-csv] Fetch existing error:', fetchError)
 
     const existMap: Record<string, any> = {}
@@ -103,6 +103,9 @@ export async function POST(req: NextRequest) {
         manual_status: ex?.manual_status ?? null,
         notes: ex?.notes ?? null,
         escalated: ex?.escalated ?? false,
+        intercom_link: ex?.intercom_link ?? null,
+        escalation_slack_link: ex?.escalation_slack_link ?? null,
+        tags: ex?.tags ?? [],
         updated_at: new Date().toISOString(),
       }
     }).filter(Boolean)
