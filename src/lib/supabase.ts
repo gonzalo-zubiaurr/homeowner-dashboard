@@ -14,6 +14,11 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
       eventsPerSecond: 10,
     },
   },
+  global: {
+    headers: {
+      'apikey': supabaseAnonKey,
+    },
+  },
 })
 
 export type Lease = {
@@ -51,6 +56,7 @@ export type Lease = {
   escalated: boolean
   escalation_slack_link: string | null
   last_note_at: string | null
+  tags: string[] | null
   updated_at: string
 }
 
@@ -68,6 +74,7 @@ export type ChecklistItem = {
   item_key: string
   completed: boolean
   completed_at: string | null
+  tags: string[] | null
   updated_at: string
 }
 
