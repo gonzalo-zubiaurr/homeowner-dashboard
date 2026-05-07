@@ -6,8 +6,22 @@ import type { User } from '@supabase/supabase-js'
 
 const DEFAULT_LEASE_TYPES = ['New', 'Adopted', 'Revised', 'Turnover']
 
+const TAGS = [
+  { key: 'backing_out', label: 'Backing Out', color: '#DC2626', bg: '#FEF2F2' },
+  { key: 'unresponsive', label: 'Unresponsive', color: '#92400E', bg: '#FEF3C7' },
+  { key: 'dwolla_suspended', label: 'Dwolla Suspended', color: '#1D4ED8', bg: '#EFF6FF' },
+  { key: 'international', label: 'International', color: '#065F46', bg: '#ECFDF5' },
+  { key: 'debt_deduction', label: 'Debt Deduction', color: '#6D28D9', bg: '#F5F3FF' },
+  { key: 'needs_insurance_quote', label: 'Needs Insurance Quote', color: '#B45309', bg: '#FFFBEB' },
+  { key: 'lease_break', label: 'Lease Break', color: '#0F766E', bg: '#F0FDFA' },
+]
+
 function Badge({ label, color, bg }: { label: string; color: string; bg: string }) {
   return <span style={{ padding: '2px 8px', borderRadius: 999, fontSize: 11, fontWeight: 700, color, background: bg, border: `1px solid ${color}30`, whiteSpace: 'nowrap' as const, fontFamily: 'Montserrat, sans-serif' }}>{label}</span>
+}
+
+function TagBadge({ tag }: { tag: typeof TAGS[0] }) {
+  return <span style={{ padding: '2px 8px', borderRadius: 999, fontSize: 10, fontWeight: 700, color: tag.color, background: tag.bg, border: `1px solid ${tag.color}30`, whiteSpace: 'nowrap' as const, fontFamily: 'Montserrat, sans-serif' }}>{tag.label}</span>
 }
 
 function StatusBadge({ status }: { status: ComputedStatus }) {
@@ -82,12 +96,19 @@ function SidePanel({ lease, checklist, notes, onClose, onToggle, onUpdateLease, 
   const [escalationSlackLink, setEscalationSlackLink] = useState(lease.escalation_slack_link || '')
   const [savingSlack, setSavingSlack] = useState(false)
 
+  const currentTags: string[] = lease.tags || []
+
   const handleAddNote = async () => {
     if (!newNote.trim()) return
     setSavingNote(true)
     await onAddNote(lease.lease_id, newNote.trim())
     setNewNote('')
     setSavingNote(false)
+  }
+
+  const toggleTag = (key: string) => {
+    const newTags = currentTags.includes(key) ? currentTags.filter(t => t !== key) : [...currentTags, key]
+    onUpdateLease(lease.lease_id, { tags: newTags })
   }
 
   const saveIntercom = async () => { setSavingIntercom(true); await onUpdateLease(lease.lease_id, { intercom_link: intercomLink }); setSavingIntercom(false) }
@@ -114,6 +135,7 @@ function SidePanel({ lease, checklist, notes, onClose, onToggle, onUpdateLease, 
           <Badge label={lease.payout_plan} color={lease.payout_plan === 'Monthly' ? '#1A3A5C' : '#64748B'} bg={lease.payout_plan === 'Monthly' ? '#EEF3F7' : '#F8FAFC'} />
           <Badge label={lease.lease_type} color='#6D28D9' bg='#F5F3FF' />
           {lease.escalated && <Badge label='🚨 Escalated' color='#DC2626' bg='#FEF2F2' />}
+          {currentTags.map(t => { const tag = TAGS.find(x => x.key === t); return tag ? <TagBadge key={t} tag={tag} /> : null })}
         </div>
       </div>
 
@@ -154,6 +176,22 @@ function SidePanel({ lease, checklist, notes, onClose, onToggle, onUpdateLease, 
             </div>
           </div>
         )}
+
+        {/* Tags */}
+        <div>
+          <div style={{ fontSize: 11, fontWeight: 700, color: '#94A3B8', letterSpacing: '0.06em', marginBottom: 10, fontFamily: 'Montserrat, sans-serif' }}>TAGS</div>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+            {TAGS.map(tag => {
+              const active = currentTags.includes(tag.key)
+              return (
+                <button key={tag.key} onClick={() => toggleTag(tag.key)}
+                  style={{ padding: '5px 12px', borderRadius: 999, fontSize: 11, fontWeight: 700, cursor: 'pointer', fontFamily: 'Montserrat, sans-serif', border: `1.5px solid ${active ? tag.color : '#E2E8F0'}`, background: active ? tag.bg : '#F8FAFC', color: active ? tag.color : '#94A3B8', transition: 'all 0.15s' }}>
+                  {active ? '✓ ' : ''}{tag.label}
+                </button>
+              )
+            })}
+          </div>
+        </div>
 
         {/* Checklist */}
         <div>
@@ -218,10 +256,9 @@ function SidePanel({ lease, checklist, notes, onClose, onToggle, onUpdateLease, 
           </button>
         </div>
 
-        {/* Notes CRM Log */}
+        {/* Activity Log */}
         <div>
           <div style={{ fontSize: 11, fontWeight: 700, color: '#94A3B8', letterSpacing: '0.06em', marginBottom: 10, fontFamily: 'Montserrat, sans-serif' }}>ACTIVITY LOG</div>
-          {/* Add new note */}
           <div style={{ marginBottom: 12 }}>
             <textarea value={newNote} onChange={e => setNewNote(e.target.value)} placeholder="Add a note or update…"
               style={{ width: '100%', minHeight: 70, padding: '10px 12px', borderRadius: 8, border: '1.5px solid #E2E8F0', background: '#F8FAFC', color: '#1A3A5C', fontFamily: 'Montserrat, sans-serif', fontSize: 13, resize: 'vertical', outline: 'none' }} />
@@ -230,13 +267,13 @@ function SidePanel({ lease, checklist, notes, onClose, onToggle, onUpdateLease, 
               {savingNote ? 'Saving…' : 'Add Note'}
             </button>
           </div>
-          {/* Notes history */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-            {notes.length === 0 ? (
+            {notes.length === 0 && !lease.notes ? (
               <div style={{ padding: '12px', background: '#FEF2F2', borderRadius: 8, fontSize: 12, color: '#DC2626', fontFamily: 'Montserrat, sans-serif', fontWeight: 500, textAlign: 'center' }}>
                 ⚠️ No notes yet — add an update
               </div>
-            ) : notes.map(n => (
+            ) : null}
+            {notes.map(n => (
               <div key={n.id} style={{ padding: '10px 12px', background: '#F8FAFC', borderRadius: 8, border: '1px solid #E2E8F0' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
                   <span style={{ fontSize: 11, fontWeight: 700, color: '#2C4F6B', fontFamily: 'Montserrat, sans-serif' }}>{n.author}</span>
@@ -245,6 +282,15 @@ function SidePanel({ lease, checklist, notes, onClose, onToggle, onUpdateLease, 
                 <p style={{ fontSize: 13, color: '#1A3A5C', fontFamily: 'Montserrat, sans-serif', margin: 0, lineHeight: 1.5 }}>{n.note}</p>
               </div>
             ))}
+            {lease.notes && (
+              <div style={{ padding: '10px 12px', background: '#FFFBEB', borderRadius: 8, border: '1px solid #FDE68A' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
+                  <span style={{ fontSize: 11, fontWeight: 700, color: '#92400E', fontFamily: 'Montserrat, sans-serif' }}>Legacy Note</span>
+                  <span style={{ fontSize: 10, color: '#94A3B8', fontFamily: 'Montserrat, sans-serif' }}>Imported</span>
+                </div>
+                <p style={{ fontSize: 13, color: '#1A3A5C', fontFamily: 'Montserrat, sans-serif', margin: 0, lineHeight: 1.5 }}>{lease.notes}</p>
+              </div>
+            )}
           </div>
         </div>
       </div>
@@ -269,10 +315,11 @@ function DashboardInner() {
 
   const [search, setSearch] = useState('')
   const [filterConcierges, setFilterConcierges] = useState<string[]>(searchParams.getAll('concierge') || [])
-  const [filterStatus, setFilterStatus] = useState<ComputedStatus | ''>(searchParams.get('status') as ComputedStatus || '')
+  const [filterStatuses, setFilterStatuses] = useState<ComputedStatus[]>((searchParams.get('status') ? [searchParams.get('status') as ComputedStatus] : []))
   const [filterPayouts, setFilterPayouts] = useState<string[]>(searchParams.getAll('payoutPlan').length ? searchParams.getAll('payoutPlan') : ['Monthly'])
   const [filterLeaseTypes, setFilterLeaseTypes] = useState<string[]>(searchParams.getAll('leaseType').length ? searchParams.getAll('leaseType') : DEFAULT_LEASE_TYPES)
   const [filterAgreement, setFilterAgreement] = useState(searchParams.get('agreement') || 'active')
+  const [filterTags, setFilterTags] = useState<string[]>([])
   const [showPaid, setShowPaid] = useState(false)
   const [showEscalated, setShowEscalated] = useState(false)
   const [filterMonth, setFilterMonth] = useState(searchParams.get('month') || '')
@@ -349,26 +396,23 @@ function DashboardInner() {
     if (toggling.has(k)) return
     setToggling(prev => new Set(prev).add(k))
     setChecklist(prev => ({ ...prev, [homeId]: { ...(prev[homeId] || {}), [key]: !current } }))
-    await fetch('/api/toggle', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ home_id: homeId, item_key: key, completed: !current }) })
-    setToggling(prev => { const s = new Set(prev); s.delete(k); return s })
+    try {
+      await fetch('/api/toggle', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ home_id: homeId, item_key: key, completed: !current }) })
+    } finally {
+      setToggling(prev => { const s = new Set(prev); s.delete(k); return s })
+    }
   }
 
   const handleUpdateLease = async (leaseId: string, updates: Partial<Lease>) => {
     setLeases(prev => prev.map(l => l.lease_id === leaseId ? { ...l, ...updates } : l))
-    if (selectedLease?.lease_id === leaseId) setSelectedLease(prev => prev ? { ...prev, ...updates } : prev)
+    if (selectedLeaseRef.current?.lease_id === leaseId) setSelectedLease(prev => prev ? { ...prev, ...updates } : prev)
     await fetch('/api/update-lease', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ lease_id: leaseId, ...updates }) })
   }
 
   const handleAddNote = async (leaseId: string, note: string) => {
     const author = user?.email?.split('@')[0] || user?.email || 'Unknown'
     const now = new Date().toISOString()
-    const optimisticNote: LeaseNote = {
-      id: crypto.randomUUID(),
-      lease_id: leaseId,
-      note,
-      author,
-      created_at: now,
-    }
+    const optimisticNote: LeaseNote = { id: crypto.randomUUID(), lease_id: leaseId, note, author, created_at: now }
     setNotesMap(prev => ({ ...prev, [leaseId]: [optimisticNote, ...(prev[leaseId] || [])] }))
     setLeases(prev => prev.map(l => l.lease_id === leaseId ? { ...l, last_note_at: now } : l))
     await fetch('/api/add-note', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ lease_id: leaseId, note, author }) })
@@ -389,6 +433,11 @@ function DashboardInner() {
   const handleSignOut = async () => { await supabase.auth.signOut(); window.location.href = '/login' }
   const toggleCol = (col: string) => setHiddenCols(prev => { const s = new Set(prev); s.has(col) ? s.delete(col) : s.add(col); return s })
   const handleSort = (col: string) => { if (sortCol === col) setSortDir(d => d === 'asc' ? 'desc' : 'asc'); else { setSortCol(col); setSortDir('asc') } }
+
+  const copyAddress = (address: string, e: React.MouseEvent) => {
+    e.stopPropagation()
+    navigator.clipboard.writeText(address)
+  }
 
   const allConcierges = Array.from(new Set(leases.map(l => l.concierge).filter(Boolean))).sort()
   const allLeaseTypes = Array.from(new Set(leases.map(l => l.lease_type).filter(Boolean))).sort()
@@ -414,10 +463,11 @@ function DashboardInner() {
     if (!showPaid && status === 'paid') return false
     if (filterAgreement === 'active' && l.agreement_status?.toLowerCase() !== 'active') return false
     if (filterAgreement === 'inactive' && l.agreement_status?.toLowerCase() !== 'inactive') return false
-    if (filterStatus && status !== filterStatus) return false
+    if (filterStatuses.length > 0 && !filterStatuses.includes(status)) return false
     if (filterPayouts.length > 0 && !filterPayouts.includes(l.payout_plan)) return false
     if (filterLeaseTypes.length > 0 && !filterLeaseTypes.includes(l.lease_type)) return false
     if (filterConcierges.length > 0 && !filterConcierges.includes(l.concierge)) return false
+    if (filterTags.length > 0 && !filterTags.every(t => (l.tags || []).includes(t))) return false
     if (showEscalated && !l.escalated) return false
     if (!matchesDate(l)) return false
     if (search) {
@@ -442,7 +492,6 @@ function DashboardInner() {
     return 0
   })
 
-  // Status counts using filtered
   const statusCounts = (Object.keys(STATUS_CONFIG) as ComputedStatus[]).reduce((acc, s) => {
     acc[s] = filtered.filter(l => getStatus(l) === s).length
     return acc
@@ -459,6 +508,7 @@ function DashboardInner() {
     { key: 'rent_amount', label: 'Rent' },
     { key: 'payout_plan', label: 'Payout Plan' },
     { key: 'lease_type', label: 'Lease Type' },
+    { key: 'tags', label: 'Tags' },
     { key: 'failed_months', label: 'Open Months' },
     { key: 'open_payable_balance', label: 'Open Balance' },
   ]
@@ -507,14 +557,17 @@ function DashboardInner() {
       </header>
 
       <div style={{ padding: '20px 24px' }}>
-        {/* Status cards - all 6 statuses */}
+        {/* Status cards */}
         <div style={{ display: 'flex', gap: 10, marginBottom: 20, flexWrap: 'wrap', alignItems: 'center' }}>
           {(Object.keys(STATUS_CONFIG) as ComputedStatus[]).map(s => {
             const cfg = STATUS_CONFIG[s]
-            const isSelected = filterStatus === s
+            const isSelected = filterStatuses.includes(s)
             return (
-              <button key={s} title={cfg.tooltip} onClick={() => { setFilterStatus(isSelected ? '' : s); if (s === 'paid') setShowPaid(true) }}
-                style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 16px', borderRadius: 10, background: '#fff', border: `1.5px solid ${isSelected ? cfg.color : '#E2E8F0'}`, cursor: 'pointer', boxShadow: '0 1px 3px rgba(0,0,0,0.05)', transition: 'all 0.2s', position: 'relative' as const }}>
+              <button key={s} title={cfg.tooltip} onClick={() => {
+                setFilterStatuses(prev => prev.includes(s) ? prev.filter(x => x !== s) : [...prev, s])
+                if (s === 'paid') setShowPaid(true)
+              }}
+                style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 16px', borderRadius: 10, background: '#fff', border: `1.5px solid ${isSelected ? cfg.color : '#E2E8F0'}`, cursor: 'pointer', boxShadow: '0 1px 3px rgba(0,0,0,0.05)', transition: 'all 0.2s' }}>
                 <span style={{ fontSize: 22, fontWeight: 700, color: cfg.color, fontFamily: 'Montserrat, sans-serif' }}>{statusCounts[s]}</span>
                 <span style={{ fontSize: 11, color: '#64748B', fontWeight: 600, fontStyle: cfg.italic ? 'italic' : 'normal' }}>
                   {cfg.label}{cfg.italic ? ' (future)' : ''}
@@ -532,22 +585,20 @@ function DashboardInner() {
           <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center', marginBottom: 10 }}>
             <input value={search} onChange={e => setSearch(e.target.value)} placeholder="🔍 Search name, address, concierge…"
               style={{ flex: 1, minWidth: 200, padding: '8px 12px', borderRadius: 7, border: '1.5px solid #E2E8F0', background: '#F8FAFC', color: '#1A3A5C', fontFamily: 'Montserrat, sans-serif', fontSize: 12, outline: 'none' }} />
-            <select value={filterStatus} onChange={e => setFilterStatus(e.target.value as ComputedStatus | '')} style={selectStyle}>
-              <option value="">All Statuses</option>
-              {(Object.keys(STATUS_CONFIG) as ComputedStatus[]).map(s => <option key={s} value={s}>{STATUS_CONFIG[s].label}{STATUS_CONFIG[s].italic ? ' (future)' : ''}</option>)}
-            </select>
             <select value={filterAgreement} onChange={e => setFilterAgreement(e.target.value)} style={selectStyle}>
               <option value="active">Active Agreements</option>
               <option value="inactive">Inactive</option>
               <option value="">All</option>
             </select>
-            <button onClick={() => { setSearch(''); setFilterConcierges([]); setFilterStatus(''); setFilterPayouts(['Monthly']); setFilterLeaseTypes(DEFAULT_LEASE_TYPES); setFilterAgreement('active'); setShowEscalated(false); setFilterMonth(''); setFilterRange({ from: '', to: '' }) }}
+            <button onClick={() => { setSearch(''); setFilterConcierges([]); setFilterStatuses([]); setFilterPayouts(['Monthly']); setFilterLeaseTypes(DEFAULT_LEASE_TYPES); setFilterAgreement('active'); setShowEscalated(false); setFilterMonth(''); setFilterRange({ from: '', to: '' }); setFilterTags([]) }}
               style={{ padding: '8px 12px', borderRadius: 7, border: '1.5px solid #E2E8F0', background: '#F8FAFC', color: '#94A3B8', cursor: 'pointer', fontSize: 11, fontWeight: 700 }}>Clear</button>
           </div>
           <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center' }}>
             <MultiSelect label="All Concierges" options={allConcierges} selected={filterConcierges} onChange={setFilterConcierges} />
             <MultiSelect label="Payout Plan" options={['Monthly', 'NoGuarantee']} selected={filterPayouts} onChange={setFilterPayouts} />
             <MultiSelect label="Lease Type" options={allLeaseTypes} selected={filterLeaseTypes} onChange={setFilterLeaseTypes} />
+            <MultiSelect label="All Statuses" options={Object.keys(STATUS_CONFIG)} selected={filterStatuses} onChange={v => setFilterStatuses(v as ComputedStatus[])} />
+            <MultiSelect label="Tags" options={TAGS.map(t => t.key)} selected={filterTags} onChange={setFilterTags} />
             <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
               <div style={{ display: 'flex', borderRadius: 6, border: '1.5px solid #E2E8F0', overflow: 'hidden' }}>
                 {(['month', 'range'] as const).map(m => (
@@ -602,8 +653,9 @@ function DashboardInner() {
                   const status = getStatus(lease)
                   const isSelected = selectedLease?.lease_id === lease.lease_id
                   const leaseNotes = notesMap[lease.lease_id] || []
-                  const hasNoNotes = leaseNotes.length === 0 && status !== 'paid'
+                  const hasNoNotes = leaseNotes.length === 0 && !lease.notes && status !== 'paid'
                   const rowBg = lease.escalated ? '#FFF5F5' : isSelected ? '#F0F4FF' : hasNoNotes ? '#FFF8F8' : idx % 2 === 0 ? '#fff' : '#FAFBFC'
+                  const leaseTags = (lease.tags || []).map(t => TAGS.find(x => x.key === t)).filter(Boolean) as typeof TAGS
 
                   return (
                     <tr key={lease.lease_id} onClick={() => setSelectedLease(isSelected ? null : lease)}
@@ -615,7 +667,9 @@ function DashboardInner() {
                               ? <a href={lease.escalation_slack_link} target="_blank" rel="noreferrer" onClick={e => e.stopPropagation()} style={{ fontSize: 12, textDecoration: 'none' }}>🚨</a>
                               : <span style={{ fontSize: 12 }}>🚨</span>)}
                             <a href={`https://foundation.bln.hm/homes/${lease.home_id}`} target="_blank" rel="noreferrer" onClick={e => e.stopPropagation()}
-                              style={{ color: '#2C4F6B', fontWeight: 600, fontSize: 12, textDecoration: 'underline', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const, display: 'block', maxWidth: 200 }}>{lease.address}</a>
+                              style={{ color: '#2C4F6B', fontWeight: 600, fontSize: 12, textDecoration: 'underline', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const, display: 'block', maxWidth: 180 }}>{lease.address}</a>
+                            <button onClick={e => copyAddress(lease.address, e)} title="Copy address"
+                              style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 2, color: '#94A3B8', fontSize: 11, flexShrink: 0 }}>⎘</button>
                           </div>
                         </td>
                       )}
@@ -636,6 +690,11 @@ function DashboardInner() {
                       {!hiddenCols.has('rent_amount') && <td style={{ padding: '11px 14px', color: '#1A3A5C', fontWeight: 600, whiteSpace: 'nowrap' as const }}>${lease.rent_amount?.toLocaleString()}</td>}
                       {!hiddenCols.has('payout_plan') && <td style={{ padding: '11px 14px' }}><Badge label={lease.payout_plan === 'Monthly' ? '● Guaranteed' : '○ No Guarantee'} color={lease.payout_plan === 'Monthly' ? '#1A3A5C' : '#94A3B8'} bg={lease.payout_plan === 'Monthly' ? '#EEF3F7' : '#F8FAFC'} /></td>}
                       {!hiddenCols.has('lease_type') && <td style={{ padding: '11px 14px' }}><Badge label={lease.lease_type} color='#6D28D9' bg='#F5F3FF' /></td>}
+                      {!hiddenCols.has('tags') && <td style={{ padding: '11px 14px' }}>
+                        <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+                          {leaseTags.length > 0 ? leaseTags.map(tag => <TagBadge key={tag.key} tag={tag} />) : <span style={{ color: '#CBD5E1', fontSize: 11 }}>—</span>}
+                        </div>
+                      </td>}
                       {!hiddenCols.has('failed_months') && <td style={{ padding: '11px 14px', whiteSpace: 'nowrap' as const }}>
                         {lease.open_payable_count > 0
                           ? <span style={{ color: '#DC2626', fontWeight: 700 }}>{lease.open_payable_count} mo{lease.first_open_payable_month ? ` (${lease.first_open_payable_month}${lease.last_open_payable_month && lease.last_open_payable_month !== lease.first_open_payable_month ? `→${lease.last_open_payable_month}` : ''})` : ''}</span>
