@@ -7,13 +7,13 @@ import type { User } from '@supabase/supabase-js'
 const DEFAULT_LEASE_TYPES = ['New', 'Adopted', 'Revised', 'Turnover']
 
 const TAGS = [
-  { key: 'backing_out', label: 'Backing Out', color: '#DC2626', bg: '#FEF2F2' },
-  { key: 'unresponsive', label: 'Unresponsive', color: '#92400E', bg: '#FEF3C7' },
-  { key: 'dwolla_suspended', label: 'Dwolla Suspended', color: '#1D4ED8', bg: '#EFF6FF' },
-  { key: 'international', label: 'International', color: '#065F46', bg: '#ECFDF5' },
-  { key: 'debt_deduction', label: 'Debt Deduction', color: '#6D28D9', bg: '#F5F3FF' },
-  { key: 'needs_insurance_quote', label: 'Needs Insurance Quote', color: '#B45309', bg: '#FFFBEB' },
-  { key: 'lease_break', label: 'Lease Break', color: '#0F766E', bg: '#F0FDFA' },
+  { key: 'backing_out', label: 'Backing Out', icon: '🔙', color: '#DC2626', bg: '#FEF2F2' },
+  { key: 'unresponsive', label: 'Unresponsive', icon: '📵', color: '#92400E', bg: '#FEF3C7' },
+  { key: 'dwolla_suspended', label: 'Dwolla Suspended', icon: '💳', color: '#1D4ED8', bg: '#EFF6FF' },
+  { key: 'international', label: 'International', icon: '🌍', color: '#065F46', bg: '#ECFDF5' },
+  { key: 'debt_deduction', label: 'Debt Deduction', icon: '💰', color: '#6D28D9', bg: '#F5F3FF' },
+  { key: 'needs_insurance_quote', label: 'Needs Insurance Quote', icon: '🛡️', color: '#B45309', bg: '#FFFBEB' },
+  { key: 'lease_break', label: 'Lease Break', icon: '💔', color: '#0F766E', bg: '#F0FDFA' },
 ]
 
 function Badge({ label, color, bg }: { label: string; color: string; bg: string }) {
@@ -21,7 +21,11 @@ function Badge({ label, color, bg }: { label: string; color: string; bg: string 
 }
 
 function TagBadge({ tag }: { tag: typeof TAGS[0] }) {
-  return <span style={{ padding: '2px 8px', borderRadius: 999, fontSize: 10, fontWeight: 700, color: tag.color, background: tag.bg, border: `1px solid ${tag.color}30`, whiteSpace: 'nowrap' as const, fontFamily: 'Montserrat, sans-serif' }}>{tag.label}</span>
+  return <span style={{ padding: '2px 8px', borderRadius: 999, fontSize: 10, fontWeight: 700, color: tag.color, background: tag.bg, border: `1px solid ${tag.color}30`, whiteSpace: 'nowrap' as const, fontFamily: 'Montserrat, sans-serif' }}>{tag.icon} {tag.label}</span>
+}
+
+function TagIcon({ tag }: { tag: typeof TAGS[0] }) {
+  return <span title={tag.label} style={{ fontSize: 16, cursor: 'default', lineHeight: 1 }}>{tag.icon}</span>
 }
 
 function StatusBadge({ status }: { status: ComputedStatus }) {
@@ -186,7 +190,7 @@ function SidePanel({ lease, checklist, notes, onClose, onToggle, onUpdateLease, 
               return (
                 <button key={tag.key} onClick={() => toggleTag(tag.key)}
                   style={{ padding: '5px 12px', borderRadius: 999, fontSize: 11, fontWeight: 700, cursor: 'pointer', fontFamily: 'Montserrat, sans-serif', border: `1.5px solid ${active ? tag.color : '#E2E8F0'}`, background: active ? tag.bg : '#F8FAFC', color: active ? tag.color : '#94A3B8', transition: 'all 0.15s' }}>
-                  {active ? '✓ ' : ''}{tag.label}
+                  {active ? `✓ ${tag.icon} ${tag.label}` : `${tag.icon} ${tag.label}`}
                 </button>
               )
             })}
@@ -691,8 +695,8 @@ function DashboardInner() {
                       {!hiddenCols.has('payout_plan') && <td style={{ padding: '11px 14px' }}><Badge label={lease.payout_plan === 'Monthly' ? '● Guaranteed' : '○ No Guarantee'} color={lease.payout_plan === 'Monthly' ? '#1A3A5C' : '#94A3B8'} bg={lease.payout_plan === 'Monthly' ? '#EEF3F7' : '#F8FAFC'} /></td>}
                       {!hiddenCols.has('lease_type') && <td style={{ padding: '11px 14px' }}><Badge label={lease.lease_type} color='#6D28D9' bg='#F5F3FF' /></td>}
                       {!hiddenCols.has('tags') && <td style={{ padding: '11px 14px' }}>
-                        <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
-                          {leaseTags.length > 0 ? leaseTags.map(tag => <TagBadge key={tag.key} tag={tag} />) : <span style={{ color: '#CBD5E1', fontSize: 11 }}>—</span>}
+                        <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
+                          {leaseTags.length > 0 ? leaseTags.map(tag => <TagIcon key={tag.key} tag={tag} />) : <span style={{ color: '#CBD5E1', fontSize: 11 }}>—</span>}
                         </div>
                       </td>}
                       {!hiddenCols.has('failed_months') && <td style={{ padding: '11px 14px', whiteSpace: 'nowrap' as const }}>
